@@ -5,6 +5,8 @@ from copy import deepcopy
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 
+import pandas
+
 from deap import base, creator, tools
 from deap.benchmarks.tools import hypervolume
 
