@@ -5,8 +5,6 @@ from copy import deepcopy
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 
-import pandas
-
 from deap import base, creator, tools
 from deap.benchmarks.tools import hypervolume
 
@@ -160,7 +158,7 @@ class NSGA_III_Learning:
           
     def _RUN(self, problem_name, use_agent=True) -> None:
         """ Run the NSGA-III optimization loop until the termination criterion is met """ 
-        # print(f'--- Start NSGA-III Run for {self.NGEN} generations and a population of size {self.POP_SIZE} distributing work over {self.MP} cores ---') 
+        print(f'--- Start NSGA-III Run for {self.NGEN} generations and a population of size {self.POP_SIZE} distributing work over {self.MP} cores ---') 
         self.val_bounds = ps.problem_bounds[problem_name]['val']
         self.std_bounds = ps.problem_bounds[problem_name]['std']
         random.seed(10)
@@ -200,11 +198,28 @@ class NSGA_III_Learning:
         self.logbook.header = "gen", "evals", "std", "min", "avg", "max"
         
         # Initialize and evaluate population
+        #probeersels
         pop = toolbox.population(n=self.POP_SIZE)
-        fitnesses = toolbox.map(toolbox.evaluate, pop)
-        for ind, fit in zip(pop, fitnesses):
-            ind.fitness.values = fit[0]
+        print(pop)        
+        fitnesses = []
+        for i in pop:
+            hoi = toolbox.evaluate(i)
+            print('hoi')
             
+            fitnesses.append(toolbox.evaluate(i))
+        fitnesses = map(toolbox.evaluate, pop)
+        print('dit is', fitnesses)
+        fitnesses = list(fitnesses)
+        for ind, fit in zip(pop, fitnesses):
+            ind.fitness.values = fit
+
+        #old version
+        #pop = toolbox.population(n=self.POP_SIZE)
+        #fitnesses = toolbox.map(toolbox.evaluate, pop)
+        
+        #for ind, fit in zip(pop, fitnesses):
+        #   ind.fitness.values = fit[0]
+    
         record = stats.compile(pop)
         self.logbook.record(gen=0, evals=self.POP_SIZE, **record)
         if self.verbose: 
@@ -223,7 +238,7 @@ class NSGA_III_Learning:
         track_states.append(state)
         track_actions.append(operator_settings)
 
-        # Start generational pocess
+        # Start generational process
         for gen in range(1, self.NGEN+1): 
             # Create offspring through selection, crossover and mutation applied using the given percentages
             offspring = self.create_offspring(population=pop, 
@@ -314,9 +329,9 @@ if __name__ == '__main__':
                              MP=0, 
                              verbose=False, 
                              learn_agent=True)
+                        
         
     nsga.run_episodes(nr_of_episodes=4000,
                       progressbar=True)
     
 
-    
