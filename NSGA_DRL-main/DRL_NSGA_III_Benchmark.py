@@ -1,6 +1,7 @@
 import numpy as np
 import multiprocessing
 import random
+import array
 from copy import deepcopy
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
@@ -14,9 +15,13 @@ import Problem_Suites as ps
 from tqdm import tqdm
 import pickle
 
+NOBJ = 3
 # Initialize creator class
-creator.create("FitnessMulti", base.Fitness, weights=(-1.0, -1.0, -1.0))
-creator.create("Individual", list, typecode="d", fitness=creator.FitnessMulti)
+#creator.create("FitnessMulti", base.Fitness, weights=(-1.0, -1.0, -1.0))
+#creator.create("Individual", list, typecode="d", fitness=creator.FitnessMulti)
+creator.create('FitnessMulti', base.Fitness, weights = (-1.0,)*NOBJ)
+creator.create('Individual', list, fitness = creator.FitnessMulti)
+
 
 class NSGA_III_Learning:
     """  
@@ -112,15 +117,23 @@ class NSGA_III_Learning:
         pareto_front = tools.sortNondominated(individuals=population, 
                                               k=self.POP_SIZE, 
                                               first_front_only=True)[0]
-        return [np.array(indiv.fitness.values) for indiv in pareto_front]
-    
+        #return [np.array(indiv.fitness.values) for indiv in pareto_front]
+        return pareto_front
+
     def calculate_hypervolume(self, pareto_front) -> float:
         """ Normalize values and calculate the hypervolume indicator of the current pareto front """
+        #OUD
         # Retrieve and calculate pareto front figures
-        normalized_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
-                                                                LB=self.val_bounds[i][0], 
-                                                                UB=self.val_bounds[i][1]) for i in range(self.NOBJ)]) for obj_v in pareto_front])        
-        hv = hypervolume(normalized_pareto_set * -1, self.hv_reference)
+        #normalized_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
+        #                                                        LB=self.val_bounds[i][0], 
+         #                                                       UB=self.val_bounds[i][1]) for i in range(self.NOBJ)]) for obj_v in pareto_front])        
+        #print(normalized_pareto_set)
+        #hv = hypervolume(normalized_pareto_set * -1, self.hv_reference)
+        
+        #NIEUW
+        print("Below you find the normalized pareto set")
+        hv = hypervolume(pareto_front, self.hv_reference)
+        print(hv)
         self.hv_tracking.append(hv)
         return hv
     
@@ -155,7 +168,14 @@ class NSGA_III_Learning:
             state = state_
         
             return reward, state, self.agent.choose_action(observation=state), idx
-          
+
+    def uniform(low, up, size=None):
+        try:
+            return [random.uniform(a, b) for a, b in zip(low, up)]
+        except TypeError:
+            return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
+
+
     def _RUN(self, problem_name, use_agent=True) -> None:
         """ Run the NSGA-III optimization loop until the termination criterion is met """ 
         print(f'--- Start NSGA-III Run for {self.NGEN} generations and a population of size {self.POP_SIZE} distributing work over {self.MP} cores ---') 
@@ -165,7 +185,9 @@ class NSGA_III_Learning:
         
         # Retrieve problem suite from archive
         problem = ps.problems[problem_name]
+        print('Problem to solve:', problem)
         IND_SIZE = ps.problem_dims[problem_name]
+        print(IND_SIZE)
         
         # Initialize tracking lists of the agents interactions
         track_states = []
@@ -174,9 +196,13 @@ class NSGA_III_Learning:
         reward_idx_tracker = []
     
         toolbox = base.Toolbox()
+        #NIEUWWWW
+        #toolbox.register("attr_float", uniform, self.BOUND_L, self.BOUND_U, NDIM)
+
+        
+        #OUDDDDDD
         toolbox.register("attr_float", random.random)
-        toolbox.register("individual", tools.initRepeat, creator.Individual,
-                         toolbox.attr_float, n=IND_SIZE)
+        toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, n=IND_SIZE)
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
         
         ref_points = tools.uniform_reference_points(self.NOBJ, self.P)
@@ -199,34 +225,28 @@ class NSGA_III_Learning:
         
         # Initialize and evaluate population
         #probeersels
-        pop = toolbox.population(n=self.POP_SIZE)
-        print(pop)        
-        fitnesses = []
-        for i in pop:
-            hoi = toolbox.evaluate(i)
-            print('hoi')
-            
-            fitnesses.append(toolbox.evaluate(i))
-        fitnesses = map(toolbox.evaluate, pop)
-        print('dit is', fitnesses)
-        fitnesses = list(fitnesses)
-        for ind, fit in zip(pop, fitnesses):
+        pop = toolbox.population(n = self.POP_SIZE)
+        invalid_ind = [ind for ind in pop if not ind.fitness.valid]
+        fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+        for ind, fit in zip(invalid_ind, fitnesses):
+            #print(fit)
             ind.fitness.values = fit
 
         #old version
         #pop = toolbox.population(n=self.POP_SIZE)
         #fitnesses = toolbox.map(toolbox.evaluate, pop)
-        
         #for ind, fit in zip(pop, fitnesses):
         #   ind.fitness.values = fit[0]
-    
+        
         record = stats.compile(pop)
         self.logbook.record(gen=0, evals=self.POP_SIZE, **record)
         if self.verbose: 
             print(self.logbook.stream)
         
         # Calculate pareto front and hypervolume indicator
-        pareto = self.retrieve_pareto_front(population=pop)           
+        
+        pareto = self.retrieve_pareto_front(population=pop)        
+        print(pareto)   
         prev_hv = self.calculate_hypervolume(pareto_front=pareto)
         
         # Retrieve initial operator settings
@@ -248,7 +268,7 @@ class NSGA_III_Learning:
             # Evaluate the individuals with an invalid fitness (+ measure evaluation time)
             fitnesses = toolbox.map(toolbox.evaluate, offspring)
             for ind, fit in zip(offspring, fitnesses):
-                ind.fitness.values = fit[0]
+                ind.fitness.values = fit
             
             # Select the next generation population from parents and offspring, constained by the population size
             prev_pop = [deepcopy(ind) for ind in pop]
@@ -327,7 +347,7 @@ if __name__ == '__main__':
                              mut_prob=1.0, 
                              lr=1e-4,
                              MP=0, 
-                             verbose=False, 
+                             verbose=True, 
                              learn_agent=True)
                         
         
