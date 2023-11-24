@@ -118,23 +118,31 @@ class NSGA_III_Learning:
                                               k=self.POP_SIZE, 
                                               first_front_only=True)[0]
         #return [np.array(indiv.fitness.values) for indiv in pareto_front]
+        if return_indivs:
+            return [np.array(indiv.fitness.values) for indiv in pareto_front], [self.eval.transform_individual(indiv) for indiv in pareto_front]
+        else:
+            return [np.array(indiv.fitness.values) for indiv in pareto_front]
         return pareto_front
 
     def calculate_hypervolume(self, pareto_front) -> float:
         """ Normalize values and calculate the hypervolume indicator of the current pareto front """
         #OUD
-        # Retrieve and calculate pareto front figures
-        #normalized_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
-        #                                                        LB=self.val_bounds[i][0], 
-         #                                                       UB=self.val_bounds[i][1]) for i in range(self.NOBJ)]) for obj_v in pareto_front])        
-        #print(normalized_pareto_set)
-        #hv = hypervolume(normalized_pareto_set * -1, self.hv_reference)
+        print('pareto')
+        print(pareto_front)
+              
+        #Retrieve and calculate pareto front figures
+        normalized_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
+                                                               LB=self.val_bounds[i][0], 
+                                                               UB=self.val_bounds[i][1]) for i in range(self.NOBJ)]) for obj_v in pareto_front])        
+        print('normalized pareto set')
+        print(normalized_pareto_set)
+        hv = hypervolume(normalized_pareto_set * -1, self.hv_reference)
         
         #NIEUW
-        print("Below you find the normalized pareto set")
-        hv = hypervolume(pareto_front, self.hv_reference)
-        print(hv)
-        self.hv_tracking.append(hv)
+        # print("Below you find the normalized pareto set")
+        # hv = hypervolume(pareto_front, self.hv_reference)
+        # print("Hypervolume", hv)
+        # self.hv_tracking.append(hv)
         return hv
     
     def call_agent(self, gen, hv, pareto_size, population, offspring=[], state=[], action=None, prev_hv=None) -> tuple:
@@ -153,10 +161,10 @@ class NSGA_III_Learning:
                                                             hv=hv,
                                                             pareto_size=pareto_size)
             
-            reward = self.agent.reward_functions(pop=population, 
-                                                 off=offspring, 
-                                                 prev_hv=prev_hv, 
-                                                 new_hv=hv)
+            # reward = self.agent.reward_functions(pop=population, 
+            #                                      off=offspring, 
+            #                                      prev_hv=prev_hv, 
+            #                                      new_hv=hv)
             
             idx = self.agent.store_transition(state=state, 
                                               action=action, 
@@ -167,7 +175,8 @@ class NSGA_III_Learning:
             
             state = state_
         
-            return reward, state, self.agent.choose_action(observation=state), idx
+            #return reward, state, self.agent.choose_action(observation=state), idx
+            return state, self.agent.choose_action(observation=state), idx
 
     def uniform(low, up, size=None):
         try:
@@ -269,7 +278,7 @@ class NSGA_III_Learning:
             fitnesses = toolbox.map(toolbox.evaluate, offspring)
             for ind, fit in zip(offspring, fitnesses):
                 ind.fitness.values = fit
-            
+
             # Select the next generation population from parents and offspring, constained by the population size
             prev_pop = [deepcopy(ind) for ind in pop]
             pop = toolbox.select(pop + offspring, self.POP_SIZE)
@@ -289,7 +298,8 @@ class NSGA_III_Learning:
                 self.stagnation_counter = 0
              
             # Request action from agent and save/learn from interaction
-            prev_reward, state, action, reward_idx = self.call_agent(gen=gen, 
+            #prev_reward, state, action, reward_idx = self.call_agent
+            state, action, reward_idx = self.call_agent             (gen=gen, 
                                                                      hv=cur_hv, 
                                                                      pareto_size=len(pareto), 
                                                                      population=prev_pop, 
@@ -300,7 +310,7 @@ class NSGA_III_Learning:
             operator_settings = self.agent.retrieve_operator(action=action)
             track_states.append(state)
             track_actions.append(operator_settings)
-            track_rewards.append(prev_reward)
+            #track_rewards.append(prev_reward)
             reward_idx_tracker.append(reward_idx)
             prev_hv = cur_hv
             
@@ -351,7 +361,7 @@ if __name__ == '__main__':
                              learn_agent=True)
                         
         
-    nsga.run_episodes(nr_of_episodes=4000,
+    nsga.run_episodes(nr_of_episodes=1,
                       progressbar=True)
     
 
