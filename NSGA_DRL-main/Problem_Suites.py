@@ -1,4 +1,5 @@
-#from pymoo.factory import get_problem
+
+#from pymoo.problems import get_problem
 from pymop.factory import get_problem
 # Set problems and problem dimensions
 problem_names = ['dtlz2', 'dascmop7.1', 'dascmop7.2', 'dascmop7.3', 'dascmop7.4', 'dascmop7.5', 'dascmop7.6', 

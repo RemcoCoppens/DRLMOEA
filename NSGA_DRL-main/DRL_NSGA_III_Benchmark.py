@@ -112,7 +112,7 @@ class NSGA_III_Learning:
         else:
             return (val - LB)/(UB - LB)
     
-    def retrieve_pareto_front(self, population) -> list:
+    def retrieve_pareto_front(self, population, return_indivs = False) -> list:
         """ Calculate the pareto front obtained by the evolutionary algorithm """
         pareto_front = tools.sortNondominated(individuals=population, 
                                               k=self.POP_SIZE, 
@@ -248,7 +248,7 @@ class NSGA_III_Learning:
         #   ind.fitness.values = fit[0]
         
         record = stats.compile(pop)
-        self.logbook.record(gen=0, evals=self.POP_SIZE, **record)
+        self.logbook.record(gen=0, evals=len(invalid_ind), **record)
         if self.verbose: 
             print(self.logbook.stream)
         
