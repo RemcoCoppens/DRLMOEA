@@ -9,8 +9,8 @@ from copy import deepcopy
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 
-from deap import base, creator, tools
-from deap.benchmarks.tools import hypervolume
+from deap import base, creator, tools, algorithms
+from deap.benchmarks.tools import hypervolume, igd
 
 import Benchmark_Problem_Suites as ps
 
@@ -48,30 +48,27 @@ class NSGA_III:
                 return f'NSGA-III_{folder_extension}'
         else:
             return 'NSGA-III'
-    
-    def save_to_file(data, filename):
-        """ Create a file using the given file name and save the given data in this pickled file """
-        file = open(f"Results/{filename}.pkl", "wb")
-        pickle.dump(data, file)
-        file.close()
         
     def save_generation_to_file(self, gen, population, avg_eval_time, gen_time, final_pop=None, alg_exec_time=None):
         """ Save performance of generation to file """
         # Summarize performance in dictionary object and save to file
         performance_dict = {}
-        performance_dict['pareto_front'], performance_dict['pareto_front_indivs'] = self.retrieve_pareto_front(population)
+        #performance_dict['pareto_front'], performance_dict['pareto_front_indivs'] = self.retrieve_pareto_front(population)
         performance_dict['avg_eval_time'] = avg_eval_time
         performance_dict['gen_time'] = gen_time
         performance_dict['avg_obj'] = self.logbook[gen]['avg']
         performance_dict['max_obj'] = self.logbook[gen]['max']
         performance_dict['min_obj'] = self.logbook[gen]['min']
         performance_dict['std_obj'] = self.logbook[gen]['std']
-        performance_dict['population'] = [list(np.array(indiv.fitness.values)) for indiv in population]
+        #performance_dict['population'] = [list(np.array(indiv.fitness.values)) for indiv in population]
         if final_pop != None and alg_exec_time != None:
             performance_dict['algorithm_execution_time'] = alg_exec_time
         
-        
-        self.save_to_file(performance_dict, f'{self.directory}/Gen_{gen}')
+        #save to file
+        file = open(f"Results/{f'{self.directory}/Gen_{gen}'}.pkl", "wb")
+        pickle.dump(performance_dict, file)
+        file.close()
+
 
     def retrieve_pareto_front(self, population):
         """ Calculate and return the pareto optimal set """
@@ -102,7 +99,8 @@ class NSGA_III:
         #Set up the toolboc for reference points and evolutionary process
         ref_points = tools.uniform_reference_points(nobj=self.NBOJ, p=self.P)
         toolbox.register('evaluate', self.PROBLEM.evaluate)
-        toolbox.register('crossover', tools.cxSimulatedBinaryBounded, low=self.BOUND_L, up=self.BOUND_U, eta=30.0)
+        toolbox.register("select", tools.selNSGA3, ref_points=ref_points)
+        toolbox.register('mate', tools.cxSimulatedBinaryBounded, low=self.BOUND_L, up=self.BOUND_U, eta=30.0)
         toolbox.register('mutate', tools.mutPolynomialBounded, low=self.BOUND_L, up=self.BOUND_U, eta=20.0, indpb=1.0/self.NDIM)
 
         #parallel 
@@ -146,7 +144,8 @@ class NSGA_III:
             gen_start = time.time()
 
             #Create offspring
-            offspring = algorithms.VarAnd(pop, toolbox, self.CXPB, self.MUTPB)
+            offspring = algorithms.varAnd(pop, toolbox, self.CXPB, self.MUTPB)
+        
 
             #Evaluate the individuals of the offspring with an invalid fitness (measure evaluation time)
             eval_start = time.time()
@@ -168,7 +167,6 @@ class NSGA_III:
             gen_time = time.time() - gen_start
 
             #Save generation to file
-
             if gen!= self.NGEN:
                 self.save_generation_to_file(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time)
             #Final generation
@@ -177,6 +175,7 @@ class NSGA_III:
                 self.save_generation_to_file(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time,
                                              final_pop=[list(self.eval.transform_individual(indiv)) for indiv in pop],
                                              alg_exec_time=algorithm_execution_time) 
+                
         # Close the multiprocessing pool if used
         if self.MP > 0:
             pool.close()
@@ -190,4 +189,3 @@ if __name__ == '__main__':
     nsga = NSGA_III(problem = problem, num_gen=5, pop_size=20, cross_prob=1.0, mut_prob=1.0, MP=12, verbose=True)
     
     nsga._RUN()
-    
