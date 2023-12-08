@@ -1,27 +1,22 @@
 import numpy as np
-import pandas as pd
 import multiprocessing
 import random
+import os
 import array
-import time
-import os 
-
 from copy import deepcopy
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 
-from deap import base, creator, tools, algorithms
-from deap.benchmarks.tools import hypervolume, igd
+from deap import base, creator, tools
+from deap.benchmarks.tools import hypervolume
 
-import Benchmark_Problem_Suites as ps
+from Agent_Classes.DuelingDQN_Agent import Agent
+import Benchmark_Problems_Suites as ps
 
 from tqdm import tqdm
 import pickle
 
-
-
-
-class NSGA_III:
+class NSGA_III_Learning:
     """
     Description: Class for the NSGA-III algorithm
     Input:  - problem_name: The name of the problem to be solved
@@ -34,7 +29,8 @@ class NSGA_III:
             - verbose: If True the performance of every population will be printed
     """
 
-    def __init__(self, problem_name, problem, num_gen, pop_size, cross_prob, mut_prob, MP, verbose = True):
+    def __init__(self, problem_name, problem, num_gen, pop_size, cross_prob, mut_prob, MP, verbose = True, learn_agent = True, load_agent = None):
+        #General
         self.PROBLEM = problem
         self.NBOJ = problem.n_obj
         self.NDIM = problem.n_var
@@ -49,13 +45,31 @@ class NSGA_III:
         self.directory = self.check_results_directory()
         self.val_bounds = ps.problem_bounds[problem_name]['val']
         self.std_bounds = ps.problem_bounds[problem_name]['std']
+        
+
+        #Agent
+        self.agent = Agent(lr  = 1e-4,
+                           gamma = 0.99,
+                           actions = [[10.0, 50.0, 100.0],
+                           [0.01, 0.05, 0.10, 0.15, 0.20]],
+                           batch_size = 32,
+                           input_size = 7
+                           )
+        if load_agent != None:
+            self.agent.load_model(load_agent)
+            self.agent.epsilon = 0
+
+        self.stagnation_counter = 0
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
+        self.hv_trace = []
+        self.hv_dict = {}
+        self.policy_dict = {}
 
-
+    
     def check_results_directory(self):
-        """ Check if there are already results in the NSGA-III file, if so ask for overwrite and if requested create new file """
-        if len(os.listdir("Results/NSGA-III")) > 0:
-            selection = input("Existing files found, do you want to overwrite? [y/n]")
+        """ Check if there are already results in the NSGA-II file, if so ask for overwrite and if requested create new file """
+        if len(os.listdir("Results/NSGA-III_DRL")) > 0:
+            selection = input("Existing result files found, do you want to overwrite? [y/n]")
             if selection == 'y' or selection == 'yes' or selection == 'Y' or selection == 'YES':
                 return 'NSGA-III'
             elif selection == 'n' or selection == 'no' or selection == 'N' or selection == 'NO':
@@ -63,8 +77,9 @@ class NSGA_III:
                 os.mkdir(path=f'Results/NSGA-III_{folder_extension}') 
                 return f'NSGA-III_{folder_extension}'
         else:
-            return 'NSGA-III'
-        
+            return 'NSGA-III'   
+    
+    
     def save_generation(self, gen, population, avg_eval_time, gen_time, pareto, hv, final_pop=None, alg_exec_time=None):
         """ Save performance of generation to file """
         # Summarize performance in dictionary object and save to file
@@ -90,6 +105,7 @@ class NSGA_III:
         file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_Run_{run}'}.pkl", "wb")
         pickle.dump(performance, file)
         file.close()
+        
 
     def normalize(self, val, LB, UB, clip=True):
         """ Apply (bounded) normalization on the given value using the given bounds (LB, UB) """
@@ -120,8 +136,20 @@ class NSGA_III:
         #self.hv_tracking.append(hv)
         return hv
 
+    def create_offspring(self, population, operator, use_agent = True) -> list:
+        """Create offspring from the current population (retrieved from DEAP varAnd module)"""
+        offspring = [deepcode(indiv) for indiv in population]
 
-    def _RUN(self): 
+
+    def call_agent (self, gen, hv, pareto_size, state = [], action = None) -> tuple:
+        """ Call the agent to retrieve the next action """
+        if action == None:
+            action = self.agent.choose_action(state)
+        else:
+            self.agent.epsilon = 0
+        return action
+    
+    def _RUN(self, use_agent = True):
         """Run the NSGA-III loop until the termination criterion is met"""
         """Initialization"""
         # Initialize creator class
@@ -132,6 +160,12 @@ class NSGA_III:
         print(f'---start NSGA-III Run for {self.NGEN} generations and a population of size {self.POP_SIZE} distributing work over {self.MP} cores ---')
         #Start time
         Start_timer = time.time()
+
+        #Initialize trace lists of the agents interactions
+        states_trace = []
+        actions_trace = []
+        rewards_trace = []
+        reward_idx_trace = []
 
         #Set up the toolbox for individuals and population
         toolbox = base.Toolbox()
@@ -161,97 +195,3 @@ class NSGA_III:
         #Initialize logbook
         self.logbook = tools.Logbook()
         self.logbook.header = ['gen', 'evals'] + stats.fields
-
-        #Generate initial population
-        pop = toolbox.population(n=self.POP_SIZE)
-        #Evaluate the individuals of the initial population with an invalid fitness (measure evaluation time)
-        eval_start = time.time()
-        invalid_ind = [ind for ind in pop if not ind.fitness.valid]
-        #print(invalid_ind)
-        fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = fit
-        avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
-        
-        #Compile statistics about the population
-        record = stats.compile(pop)
-        self.logbook.record(gen=0, evals=len(invalid_ind), **record)
-        if self.verbose:
-            print(self.logbook.stream)
-        
-        #Calculate hypervolume of initial population
-        pareto_front = self.retrieve_pareto_front(population=pop)
-        hv = self.calculate_hypervolume(pareto_front=pareto_front)
-
-        #Save generation to file
-        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, gen_time=0, pareto = pareto_front, hv = hv)
-        df = pd.DataFrame(save_gen)
-
-        """Evolutionary process"""
-        #Start the evolutionary process (measure total procesing time of evolution)
-        for gen in range(1, self.NGEN+1):
-            gen_start = time.time()
-
-            #Create offspring
-            offspring = algorithms.varAnd(pop, toolbox, self.CXPB, self.MUTPB)
-        
-
-            #Evaluate the individuals of the offspring with an invalid fitness (measure evaluation time)
-            eval_start = time.time()
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-            avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
-
-            #Select the next population from parent and offspring
-            pop = toolbox.select(pop + offspring, self.POP_SIZE)
-            #Compile statistics about the new population
-            record = stats.compile(pop)
-            self.logbook.record(gen=gen, evals=len(invalid_ind), **record)
-            if self.verbose:
-                print(self.logbook.stream)
-
-            gen_time = time.time() - gen_start
-
-            #Calculate hypervolume of population
-            pareto_front = self.retrieve_pareto_front(population=pop)
-            hv = self.calculate_hypervolume(pareto_front=pareto_front)
-
-            """"Save results"""
-            #Save generation to file
-            if gen!= self.NGEN:
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv)
-                df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-            
-            #Final generation
-            else:
-                algorithm_execution_time = time.time() - Start_timer
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv,
-                                             final_pop=1,
-                                             alg_exec_time=algorithm_execution_time) 
-                df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-                display(df)
-        # Close the multiprocessing pool if used
-        if self.MP > 0:
-            pool.close()
-            pool.join()
-        return df
-
-    def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
-        """ Run the NSGA-III algorithm multiple times """
-        for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
-            performance = self._RUN()
-            self.save_run_to_file(performance, idx, problem_name)
-
-if __name__ == '__main__':
-    problem_name = 'dtlz1'
-    if problem_name.startswith('DF'):
-        problem = ps.problems_CEC[problem_name]
-    else:
-        problem = ps.problems_DEAP[problem_name]
-
-    nsga = NSGA_III(problem_name = problem_name, problem = problem, num_gen=5, pop_size=20, cross_prob=1.0, mut_prob=1.0, MP=12, verbose=False)
-    
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=5, progressbar=True)
-

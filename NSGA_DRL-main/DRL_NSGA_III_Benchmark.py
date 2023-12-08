@@ -137,12 +137,7 @@ class NSGA_III_Learning:
         print('normalized pareto set')
         print(normalized_pareto_set)
         hv = hypervolume(normalized_pareto_set * -1, self.hv_reference)
-        
-        #NIEUW
-        # print("Below you find the normalized pareto set")
-        # hv = hypervolume(pareto_front, self.hv_reference)
-        # print("Hypervolume", hv)
-        # self.hv_tracking.append(hv)
+
         return hv
     
     def call_agent(self, gen, hv, pareto_size, population, offspring=[], state=[], action=None, prev_hv=None) -> tuple:
@@ -177,12 +172,6 @@ class NSGA_III_Learning:
         
             #return reward, state, self.agent.choose_action(observation=state), idx
             return state, self.agent.choose_action(observation=state), idx
-
-    def uniform(low, up, size=None):
-        try:
-            return [random.uniform(a, b) for a, b in zip(low, up)]
-        except TypeError:
-            return [random.uniform(a, b) for a, b in zip([low] * size, [up] * size)]
 
 
     def _RUN(self, problem_name, use_agent=True) -> None:
