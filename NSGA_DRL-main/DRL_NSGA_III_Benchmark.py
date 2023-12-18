@@ -194,11 +194,7 @@ class NSGA_III_Learning:
         reward_idx_tracker = []
     
         toolbox = base.Toolbox()
-        #NIEUWWWW
-        #toolbox.register("attr_float", uniform, self.BOUND_L, self.BOUND_U, NDIM)
-
         
-        #OUDDDDDD
         toolbox.register("attr_float", random.random)
         toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, n=IND_SIZE)
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)

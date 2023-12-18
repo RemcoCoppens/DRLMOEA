@@ -1,13 +1,15 @@
 import numpy as np
+import pandas as pd
 import multiprocessing
 import random
+import time
 import os
 import array
 from copy import deepcopy
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 
-from deap import base, creator, tools
+from deap import base, creator, tools, algorithms
 from deap.benchmarks.tools import hypervolume
 
 from Agent_Classes.DuelingDQN_Agent import Agent
@@ -34,7 +36,7 @@ class NSGA_III_Learning:
         self.PROBLEM = problem
         self.NBOJ = problem.n_obj
         self.NDIM = problem.n_var
-        self.P = 12
+        #self.P = 12
         self.BOUND_L, self.BOUND_U = 0.0, 1.0
         self.NGEN = num_gen
         self.POP_SIZE = pop_size
@@ -55,6 +57,7 @@ class NSGA_III_Learning:
                            batch_size = 32,
                            input_size = 7
                            )
+        self.learn_agent = learn_agent
         if load_agent != None:
             self.agent.load_model(load_agent)
             self.agent.epsilon = 0
@@ -74,8 +77,8 @@ class NSGA_III_Learning:
                 return 'NSGA-III'
             elif selection == 'n' or selection == 'no' or selection == 'N' or selection == 'NO':
                 folder_extension = input("Insert Folder Extension")
-                os.mkdir(path=f'Results/NSGA-III_{folder_extension}') 
-                return f'NSGA-III_{folder_extension}'
+                os.mkdir(path=f'Results/NSGA-III_DRL_{folder_extension}') 
+                return f'NSGA-III_DRL_{folder_extension}'
         else:
             return 'NSGA-III'   
     
@@ -138,16 +141,77 @@ class NSGA_III_Learning:
 
     def create_offspring(self, population, operator, use_agent = True) -> list:
         """Create offspring from the current population (retrieved from DEAP varAnd module)"""
-        offspring = [deepcode(indiv) for indiv in population]
+        #Clone parental population to create offspring population
+        offspring = [deepcopy(indiv) for indiv in population]
+        
+        
+        #Apply crossover for pairs of consecutive individuals
+        #COMMENT: KIJK NAAR DE VALUES VAN ETA, VOOR CROSSOVER EN MUTATION
+        #COMMENT: STRUCTUUR HANGT AF VAN WAT WE DE AGENT WILLEN LATEN DOEN
+        
+        for i in range(1, len(offspring), 2):
+            if use_agent:
+                if random.random() < self.CXPB:
+                    offspring[i-1], offspring[i] = tools.cxSimulatedBinaryBounded(ind1= offspring[i-1],
+                                                                                  ind2= offspring[i],
+                                                                                  eta=operator[0],
+                                                                                  low=self.BOUND_L,
+                                                                                  up=self.BOUND_U)
+                    del offspring[i-1].fitness.values, offspring[i].fitness.values
+            else:
+                if random.random() < self.CXPB:
+                    offspring[i-1], offspring[i] = tools.cxSimulatedBinaryBounded(ind1= offspring[i-1],
+                                                                                ind2= offspring[i],
+                                                                                eta=20, 
+                                                                                low=self.BOUND_L,
+                                                                                up=self.BOUND_U)
+                    del offspring[i-1].fitness.values, offspring[i].fitness.values
 
+        #Apply mutation for every individual
+        for i in range(len(offspring)):
+            if use_agent: 
+                if random.random() < self.MUTPB:
+                    offspring[i], = tools.mutPolynomialBounded(individual=offspring[i],
+                                                                eta=operator[1],
+                                                                low=self.BOUND_L,
+                                                                up=self.BOUND_U,
+                                                                indpb=operator[2])
+                    del offspring[i].fitness.values
+            else:
+                if random.random() < self.MUTPB:
+                    offspring[i], = tools.mutPolynomialBounded(individual=offspring[i],
+                                                                eta=20,
+                                                                low=self.BOUND_L,
+                                                                up=self.BOUND_U,
+                                                                indpb=1/self.NDIM)
+                    del offspring[i].fitness.values
+
+        #Return a list of varied individuals that are independent of their parents
+        return offspring
 
     def call_agent (self, gen, hv, pareto_size, state = [], action = None) -> tuple:
         """ Call the agent to retrieve the next action """
         if action == None:
-            action = self.agent.choose_action(state)
+            state = self.agent.create_state_representation(optims = self,
+                                                           gen = gen,
+                                                           hv = hv,
+                                                           pareto_size = pareto_size)
+
+            return state, self.agent.choose_action(state)
+            
         else:
-            self.agent.epsilon = 0
-        return action
+            state_ = self.agent.create_state_representation(optims = self,
+                                                              gen = gen,
+                                                              hv = hv,
+                                                              pareto_size = pareto_size)
+            
+            reward_idx = self.agent.store_transition(state = state, action = action, new_state = state_)
+
+            if self.learn_agent:
+                self.agent.learn()
+
+            state = state_
+        return state, self.action.choose_action(state), reward_idx
     
     def _RUN(self, use_agent = True):
         """Run the NSGA-III loop until the termination criterion is met"""
@@ -164,7 +228,6 @@ class NSGA_III_Learning:
         #Initialize trace lists of the agents interactions
         states_trace = []
         actions_trace = []
-        rewards_trace = []
         reward_idx_trace = []
 
         #Set up the toolbox for individuals and population
@@ -177,8 +240,6 @@ class NSGA_III_Learning:
         ref_points = tools.uniform_reference_points(nobj=self.NBOJ, p=self.P)
         toolbox.register('evaluate', self.PROBLEM.evaluate)
         toolbox.register("select", tools.selNSGA3, ref_points=ref_points)
-        toolbox.register('mate', tools.cxSimulatedBinaryBounded, low=self.BOUND_L, up=self.BOUND_U, eta=30.0)
-        toolbox.register('mutate', tools.mutPolynomialBounded, low=self.BOUND_L, up=self.BOUND_U, eta=20.0, indpb=1.0/self.NDIM)
 
         #parallel 
         if self.MP > 0:
@@ -195,3 +256,118 @@ class NSGA_III_Learning:
         #Initialize logbook
         self.logbook = tools.Logbook()
         self.logbook.header = ['gen', 'evals'] + stats.fields
+
+        #Generate initial population
+        pop = toolbox.population(n=self.POP_SIZE)
+        #Evaluate the individuals of the initial population with an invalid fitness (measure evaluation time)
+        eval_start = time.time()
+        invalid_ind = [ind for ind in pop if not ind.fitness.valid]
+        fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = fit
+        avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
+        
+        #Compile statistics about the population
+        record = stats.compile(pop)
+        self.logbook.record(gen=0, evals=len(invalid_ind), **record)
+        if self.verbose:
+            print(self.logbook.stream)
+        
+        #Calculate hypervolume of initial population
+        pareto_front = self.retrieve_pareto_front(population=pop)
+        prev_hv = self.calculate_hypervolume(pareto_front=pareto_front)
+
+        #Obtain initial operator selection from agent
+        state, action= self.call_agent(gen=0, hv=hv, pareto_size=len(pareto_front))
+        
+        operator_settings = self.agent.retrieve_operator(action = action)
+        #COMMENT: kijken of deze retrieve operator echt nodig is, ik zie niet zo snel waarom namelijk
+        #Het lijkt me dat de action de juiste action al terugkeert
+        states_trace.append(state)
+        actions_trace.append(operator_settings)
+
+        #Save generation to file
+        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, gen_time=0, pareto = pareto_front, hv = hv)
+        df = pd.DataFrame(save_gen)
+
+        """Evolutionary process"""
+        #Start the evolutionary process (measure total procesing time of evolution)
+        for gen in range(1, self.NGEN+1):
+            gen_start = time.time()
+            
+            #Create offspring
+            offspring = self.create_offspring(population=pop, operator=operator_settings, use_agent = use_agent)
+
+            #Evaluate the individuals of the offspring with an invalid fitness (measure evaluation time)
+            eval_start = time.time()
+            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+            fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+            for ind, fit in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fit
+            avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
+
+            #Select the next population from parent and offspring
+            pop = toolbox.select(pop + offspring, self.POP_SIZE)
+
+            #Compile statistics about the new population
+            record = stats.compile(pop)
+            self.logbook.record(gen=gen, evals=len(invalid_ind), **record)
+            if self.verbose:
+                print(self.logbook.stream)
+
+            #Calculate hypervolume of population
+            pareto_front = self.retrieve_pareto_front(population=pop)
+            cur_hv = self.calculate_hypervolume(pareto_front=pareto_front)
+
+            if cur_hv <= prev_hv:
+                self.stagnation_counter += 1
+            else:
+                self.stagnation_counter = 0
+
+            """ Agent interaction """
+            #Obtain next operator selection from agent
+            state, action, reward_idx = self.call_agent(gen=gen, hv=cur_hv, pareto_size=len(pareto_front), state = state, action = action)
+            
+            operator_settings = self.agent.retrieve_operator(action = action)
+            states_trace.append(state)
+            actions_trace.append(operator_settings)
+            reward_idx_trace.append(reward_idx)
+            prev_hv = cur_hv
+
+            #Calculate processig time of this generation
+            gen_time = time.time() - gen_start
+
+
+
+            """"Save results"""
+            #Save generation to file
+            if gen!= self.NGEN:
+                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv)
+                df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
+            
+            #Final generation
+            else:
+                algorithm_execution_time = time.time() - Start_timer
+                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv,
+                                             final_pop=1,
+                                             alg_exec_time=algorithm_execution_time) 
+                df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
+                display(df)
+        # Close the multiprocessing pool if used
+        if self.MP > 0:
+            pool.close()
+            pool.join()
+        return df
+
+if __name__ == '__main__':
+    nsga = NSGA_III(num_gen=200, 
+                    pop_size=20, 
+                    cross_prob=1.0, 
+                    mut_prob=1.0, 
+                    MP=10, 
+                    verbose=True, 
+                    learn_agent=True, 
+                    load_agent= None)
+        
+    nsga._RUN(use_agent=True)
+

@@ -53,10 +53,10 @@ def __init__(self, lr, gamma, actions, batch_size, input_size,
         self.action_space = [i for i in range(n_actions)]
         
         # Initialize Online Evaluation Network
-        self.q_online_network = DuelingDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
+        self.q_online_network = DDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
 
         # Initialize Target Network for action selection
-        self.q_target_network = DuelingDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
+        self.q_target_network = DDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
         
         # Set criterion and optimizer
         self.criterion = torch.nn.MSELoss()
