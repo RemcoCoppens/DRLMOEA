@@ -18,7 +18,7 @@ import Benchmark_Problem_Suites as ps
 from tqdm import tqdm
 import pickle
 
-class NSGA_III_DRL:
+class NSGA_III_Learning:
     """
     Description: Class for the NSGA-III algorithm
     Input:  - problem_name: The name of the problem to be solved
@@ -50,12 +50,12 @@ class NSGA_III_DRL:
         
 
         #Agent
-        self.agent = Agent(lr  = 1e-4, #learning rate
-                           gamma = 0.99, #discount factor
-                           actions = [[10.0, 50.0, 100.0],
-                           [0.01, 0.05, 0.10, 0.15, 0.20]], #two actions spaces, should be three
-                           batch_size = 32, #batch size for training the neural network
-                           input_size = 7 #number of features in state representation
+        self.agent = Agent(lr  = 1e-4,
+                           gamma = 0.99,
+                           actions = [[10.0,50.0,100.0],[10.0, 50.0, 100.0],
+                           [0.01, 0.05, 0.10, 0.15, 0.20]],
+                           batch_size = 32,
+                           input_size = 7
                            )
         self.learn_agent = learn_agent
         if load_agent != None:
@@ -65,27 +65,29 @@ class NSGA_III_DRL:
         self.stagnation_counter = 0
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
         self.hv_trace = []
-        
-        
+
         self.hv_dict = {}
         self.policy_dict = {}
+        
         self.run_performance = []
         self.run_reward = []
         self.run_epsilon = []
 
+        
+
     
     def check_results_directory(self):
         """ Check if there are already results in the NSGA-II file, if so ask for overwrite and if requested create new file """
-        if len(os.listdir("Results/NSGA-III_DRL")) > 0:
+        if len(os.listdir("Results/NSGA-III_Learning")) > 0:
             selection = input("Existing result files found, do you want to overwrite? [y/n]")
             if selection == 'y' or selection == 'yes' or selection == 'Y' or selection == 'YES':
-                return 'NSGA-III_DRL'
+                return 'NSGA-III_Learning'
             elif selection == 'n' or selection == 'no' or selection == 'N' or selection == 'NO':
                 folder_extension = input("Insert Folder Extension")
-                os.mkdir(path=f'Results/NSGA-III_DRL_{folder_extension}') 
-                return f'NSGA-III_DRL_{folder_extension}'
+                os.mkdir(path=f'Results/NSGA-III_Learning_{folder_extension}') 
+                return f'NSGA-III_Learning_{folder_extension}'
         else:
-            return 'NSGA-III_DRL'   
+            return 'NSGA-III_Learning'   
     
     
     def save_generation(self, gen, population, avg_eval_time, gen_time, pareto, hv, final_pop=None, alg_exec_time=None):
@@ -233,6 +235,7 @@ class NSGA_III_DRL:
         #Initialize trace lists of the agents interactions
         states_trace = []
         actions_trace = []
+        reward_trace = []
         reward_idx_trace = []
 
         #Set up the toolbox for individuals and population
@@ -265,12 +268,12 @@ class NSGA_III_DRL:
         #Generate initial population
         pop = toolbox.population(n=self.POP_SIZE)
         #Evaluate the individuals of the initial population with an invalid fitness (measure evaluation time)
-        eval_start = time.time()
+        #eval_start = time.time()
         invalid_ind = [ind for ind in pop if not ind.fitness.valid]
         fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fitness.values = fit
-        avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
+        #avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
         
         #Compile statistics about the population
         record = stats.compile(pop)
@@ -292,8 +295,9 @@ class NSGA_III_DRL:
         actions_trace.append(operator_settings)
 
         #Save generation to file
-        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, gen_time=0, pareto = pareto_front, hv = hv)
-        df = pd.DataFrame(save_gen)
+        #COMMENT: KIJKEN OF WE TIJDENS TRAINEN DIT OOK NOG WILLEN OPSLAAN, WORDT BEETJE TEVEEL VAN HET GOEDE DENK IK
+        #save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, gen_time=0, pareto = pareto_front, hv = hv)
+        #df = pd.DataFrame(save_gen)
 
         """Evolutionary process"""
         #Start the evolutionary process (measure total procesing time of evolution)
@@ -304,15 +308,14 @@ class NSGA_III_DRL:
             offspring = self.create_offspring(population=pop, operator=operator_settings, use_agent = use_agent)
 
             #Evaluate the individuals of the offspring with an invalid fitness (measure evaluation time)
-            eval_start = time.time()
+            #eval_start = time.time()
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
             for ind, fit in zip(invalid_ind, fitnesses):
                 ind.fitness.values = fit
-            avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
+            #avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
 
             #Select the next population from parent and offspring
-            
             pop = toolbox.select(pop + offspring, self.POP_SIZE)
 
             #Compile statistics about the new population
@@ -346,30 +349,34 @@ class NSGA_III_DRL:
 
 
             """"Save results"""
-            #Save generation to file
-            if gen!= self.NGEN:
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv)
-                df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
+            # #Save generation to file
+            # if gen!= self.NGEN:
+            #     save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv)
+            #     df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
             
-            #Final generation
-            else:
-                algorithm_execution_time = time.time() - Start_timer
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv,
-                                             final_pop=1,
-                                             alg_exec_time=algorithm_execution_time) 
-                df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-                display(df)
+            # #Final generation
+            # else:
+            #     algorithm_execution_time = time.time() - Start_timer
+            #     save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv,
+            #                                  final_pop=1,
+            #                                  alg_exec_time=algorithm_execution_time) 
+            #     df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
+            #     display(df)
         # Close the multiprocessing pool if used
         if self.MP > 0:
             pool.close()
             pool.join()
 
-        return df
-    
+        #return df
+        return states_trace[:-1], actions_trace[:-1], reward_idx_trace
+
     def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
         """ Run the NSGA-III algorithm multiple times """
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
-            performance = self._RUN()
+            _, actions, reward_idx = self._RUN()
+
+            #normalise and clip performance
+            
             self.save_run_to_file(performance, idx, problem_name)
         
 
@@ -380,15 +387,14 @@ if __name__ == '__main__':
     else:
         problem = ps.problems_DEAP[problem_name]
 
-    nsga = NSGA_III_DRL(problem_name = problem_name, 
+    nsga = NSGA_III_Learning(problem_name = problem_name, 
                     problem = problem, num_gen=5, 
                     pop_size=20, 
                     cross_prob=1.0, 
                     mut_prob=1.0, 
                     MP=12, 
                     verbose=False,
-                    learn_agent=False, 
+                    learn_agent=True, 
                     load_agent= None)
     
     nsga.multiple_runs(problem_name = problem_name, nr_of_runes=5, progressbar=True)
-

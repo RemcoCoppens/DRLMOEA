@@ -26,8 +26,8 @@ class DuelingDQN(nn.Module):
         
         #For training, keep track of gradients, for evaluation, don't
         if req_grad: 
-            x = F.relu(self.lin_1(STATE))
-            x = F.relu(self.lin_2(x))   
+            x = F.relu(self.fc1(STATE))
+            x = F.relu(self.fc2(x))   
     
             value = self.V(x)	
             advantage = self.A(x)
@@ -36,7 +36,7 @@ class DuelingDQN(nn.Module):
             return q_values
         
         else: 
-            with torch.norad():
+            with torch.no_grad():
                 x = F.relu(self.lin_1(STATE))
                 x = F.relu(self.lin_2(x))   
     
