@@ -87,7 +87,7 @@ class NSGA_III:
     
     def save_run_to_file(self, performance, run, problem_name):
         """ Save performance of run to file """
-        file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_Run_{run}'}.pkl", "wb")
+        file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_Run_{run}_Gens_{self.NGEN}'}.pkl", "wb")
         pickle.dump(performance, file)
         file.close()
 
@@ -97,7 +97,6 @@ class NSGA_III:
             return min(max((val - LB)/(UB - LB), 0.0), 1.0)
         else:
             return (val - LB)/(UB - LB)
-    
 
     def retrieve_pareto_front(self, population):
         """ Calculate and return the pareto optimal set """
@@ -245,13 +244,16 @@ class NSGA_III:
             self.save_run_to_file(performance, idx, problem_name)
 
 if __name__ == '__main__':
-    problem_name = 'dtlz1'
+    problem_name = 'dtlz3'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
         problem = ps.problems_DEAP[problem_name]
 
-    nsga = NSGA_III(problem_name = problem_name, problem = problem, num_gen=5, pop_size=20, cross_prob=1.0, mut_prob=1.0, MP=12, verbose=False)
+    generations = [50]
+    for i in generations:
+        nsga = NSGA_III(problem_name = problem_name, problem = problem, num_gen=i, pop_size=20, cross_prob=1.0, mut_prob=1.0, MP=12, verbose=False)
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=5, progressbar=True)
+        nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
+
 

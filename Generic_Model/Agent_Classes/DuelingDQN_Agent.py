@@ -4,8 +4,8 @@ import torch.nn.functional as F
 import os
 import numpy as np
 
-import Agent_Classes.DuelingDQN as DDQN
-import Agent_Classes.ReplayBuffer as ReplayBuffer
+from Agent_Classes.DuelingDQN import DuelingDQN 
+from Agent_Classes.ReplayBuffer import ReplayBuffer
 
         
 class Agent:
@@ -55,10 +55,10 @@ class Agent:
         self.action_space = [i for i in range(n_actions)]
         
         # Initialize Online Evaluation Network
-        self.q_online_network = DDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
+        self.q_online_network = DuelingDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
 
         # Initialize Target Network for action selection
-        self.q_target_network = DDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
+        self.q_target_network = DuelingDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
         
         # Set criterion and optimizer
         self.criterion = torch.nn.MSELoss()

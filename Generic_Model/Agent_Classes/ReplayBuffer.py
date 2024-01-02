@@ -6,8 +6,8 @@ class ReplayBuffer():
         self.mem_size = max_size # Maximal size of the replay buffer
         self.mem_cntr = 0 # Counter for the replay buffer
         
-        self.state_memory = np.zeros((self.mem_size, *input_shape), dtype=np.float32) # *input_shape unpacks the tuple
-        self.new_state_memory = np.zeros((self.mem_size, *input_shape), dtype=np.float32) # *input_shape unpacks the tuple
+        self.state_memory = np.zeros((self.mem_size, input_shape), dtype=np.float32) # *input_shape unpacks the tuple
+        self.new_state_memory = np.zeros((self.mem_size, input_shape), dtype=np.float32) # *input_shape unpacks the tuple
         
         self.action_memory = np.zeros(self.mem_size, dtype=np.int64) # Action is an integer
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32) # Reward is a float
