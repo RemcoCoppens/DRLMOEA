@@ -385,7 +385,7 @@ if __name__ == '__main__':
                     pop_size=20, 
                     cross_prob=1.0, 
                     mut_prob=1.0, 
-                    MP=12, 
+                    MP=10, 
                     verbose=False,
                     learn_agent=False, 
                     load_agent= None)

@@ -1,5 +1,6 @@
 
 import optuna
+import optuna.importance
 import numpy as np
 import pandas as pd
 import multiprocessing
@@ -77,6 +78,7 @@ class NSGA_III_HYPERPARAMETER:
         self.val_bounds = ps.problem_bounds[problem_name]['val']
         self.std_bounds = ps.problem_bounds[problem_name]['std']
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
+        self.cum_hv_list = []
     
     def _RUN(self): 
         """Run the NSGA-III loop until the termination criterion is met"""
@@ -119,7 +121,6 @@ class NSGA_III_HYPERPARAMETER:
 
         #Generate initial population
         pop = toolbox.population(n=self.POP_SIZE)
-
         #Evaluate the individuals of the initial population with an invalid fitness
         invalid_ind = [ind for ind in pop if not ind.fitness.valid]
         fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
@@ -130,6 +131,7 @@ class NSGA_III_HYPERPARAMETER:
 
         pareto_front = self.retrieve_pareto_front(population = pop)
         hv = self.calculate_hypervolume(pareto_front = pareto_front)
+        self.cum_hv_list.append(hv)
 
         #Compile statistics about the population
         record = stats.compile(pop)
@@ -160,49 +162,57 @@ class NSGA_III_HYPERPARAMETER:
             #Calculate hypervolume of population
             pareto_front = self.retrieve_pareto_front(population=pop)
             hv = self.calculate_hypervolume(pareto_front=pareto_front)           
-
+            self.cum_hv_list.append(hv)
             """"Save results"""
+
             #Save generation to file
             if gen== self.NGEN:
-                final_hv = hv
+                cum_hv = sum(self.cum_hv_list)
 
         # Close the multiprocessing pool if used
         if self.MP > 0:
             pool.close()
             pool.join()
-        return final_hv
+        return cum_hv
 
 
-def objective(trial):
-    crossover = trial.suggest_int('crossover', 0, 100)
-    mutation = trial.suggest_int('mutation', 0, 100)
-    indpbmut = trial.suggest_float('indpbmut', 0.0, 1.0)
-
-    problem_name = 'dtlz1'
-    if problem_name.startswith('DF'):
-        problem = ps.problems_CEC[problem_name]
-    else:
-        problem = ps.problems_DEAP[problem_name]
-
-    nsga = NSGA_III_HYPERPARAMETER(problem_name = problem_name,
-                                      problem = problem, num_gen=50, 
-                                      pop_size=20, 
-                                      cross_prob=1.0, 
-                                      mut_prob=1.0, 
-                                      MP=12, 
-                                      crossover_distr = crossover,
-                                      mutation_distr = mutation,
-                                      indpbmut = indpbmut,
-                                      verbose=False)
+class PROBLEM:
+    def __init__(self, name, gen):
+        self.problem_name = name 
+        self.gen = gen
+        self.seed = random.random()
     
-    performance= nsga._RUN()
 
-    return performance
+    def objective(self, trial):
+        crossover = trial.suggest_int('crossover', 0, 100)
+        mutation = trial.suggest_int('mutation', 0, 100)
+        indpbmut = trial.suggest_float('indpbmut', 0.0, 1.0)
 
-if __name__ == '__main__':
-    start_time = time.time()
+        random.seed(self.seed)
+        if self.problem_name.startswith('DF'):
+            problem = ps.problems_CEC[self.problem_name]
+        else:
+            problem = ps.problems_DEAP[self.problem_name]
+        
+        nsga = NSGA_III_HYPERPARAMETER(problem_name = self.problem_name,
+                                        problem = problem, num_gen= self.gen, 
+                                        pop_size=20, 
+                                        cross_prob=1.0, 
+                                        mut_prob=1.0, 
+                                        MP=12, 
+                                        crossover_distr = crossover,
+                                        mutation_distr = mutation,
+                                        indpbmut = indpbmut,
+                                        verbose=False)
+        
+        performance = nsga._RUN()
+
+        return performance
+
+def optimize(trials):
+    print(problem.problem_name)
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=30)
+    study.optimize(problem.objective, n_trials=trials)
     print('Best trial:')
     trial = study.best_trial
     print('value:', trial.value)
@@ -211,5 +221,32 @@ if __name__ == '__main__':
        print(f"    {key}: {value}")    
 
     print("--- %f minutes ---" % ((time.time() - start_time)/60))
+    return study
+
+if __name__ == '__main__':
+    # Set up the problem
+    start_time = time.time()
+    problem_name = 'dtlz2'
+    gen = 30    
+    trials = 30
+    runs = 2
     
-    optuna.visualization.matplotlib.plot_contour(study, params=["crossover", "mutation", "indpbmut"])
+    studies = []    
+    contour_plots = []
+
+    for i in range(runs):
+        problem = PROBLEM(problem_name, gen)
+        study = optimize(trials)
+        studies.append(study)
+    
+   
+    for study in studies:
+        print('hoi, ik ben studie')
+        print(study)
+        optuna.visualization.matplotlib.plot_contour(study)
+        optuna.visualization.matplotlib.plot_param_importances(study)
+        
+    optuna.visualization.matplotlib.plot_edf([studies[0], studies[1]])
+    #param = optuna.visualization.matplotlib.plot_param_importances(study)
+    #contour = optuna.visualization.matplotlib.plot_contour(study)
+

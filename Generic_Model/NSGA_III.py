@@ -110,11 +110,10 @@ class NSGA_III:
     
     def calculate_hypervolume(self, pareto_front) -> float:
         """ Normalize values and calculate the hypervolume indicator of the current pareto front """
-        # Retrieve and calculate pareto front figures
+        # Retrieve and calculate normalised pareto front set
         normalized_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
                                                                 LB=self.val_bounds[i][0], 
                                                                 UB=self.val_bounds[i][1]) for i in range(self.NBOJ)]) for obj_v in pareto_front])        
-
         hv = hypervolume(normalized_pareto_set, self.hv_reference_point)
         #self.hv_tracking.append(hv)
         return hv
@@ -205,6 +204,7 @@ class NSGA_III:
 
             #Select the next population from parent and offspring
             pop = toolbox.select(pop + offspring, self.POP_SIZE)
+            print(pop)
             #Compile statistics about the new population
             record = stats.compile(pop)
             self.logbook.record(gen=gen, evals=len(invalid_ind), **record)
@@ -244,15 +244,15 @@ class NSGA_III:
             self.save_run_to_file(performance, idx, problem_name)
 
 if __name__ == '__main__':
-    problem_name = 'dtlz3'
+    problem_name = 'DF1'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
         problem = ps.problems_DEAP[problem_name]
 
-    generations = [50]
+    generations = [30]
     for i in generations:
-        nsga = NSGA_III(problem_name = problem_name, problem = problem, num_gen=i, pop_size=20, cross_prob=1.0, mut_prob=1.0, MP=12, verbose=False)
+        nsga = NSGA_III(problem_name = problem_name, problem = problem, num_gen=i, pop_size=5, cross_prob=1.0, mut_prob=1.0, MP=10, verbose=False)
     
         nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
 

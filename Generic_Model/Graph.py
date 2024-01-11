@@ -33,11 +33,11 @@ def plot_hypervolume(problem_name, run, directory, gens):
     plt.xlabel("Generation", )
     plt.ylabel("Hypervolume")
     plt.title(f"Problem {problem_name}")
-    #plt.xticks(np.arange(0, gens+1, step = 1))
+    plt.xticks(np.arange(0, gens+1, step = 1))
     
     plt.savefig(f'Results/NSGA-III/{problem_name}_Gens_{gens}.png') 
     plt.show()
-doc = plot_hypervolume(problem_name= "dtlz2", 
+doc = plot_hypervolume(problem_name= "DF1", 
                        run = 10, 
                        directory = "NSGA-III", 
-                       gens = 50)
+                       gens =10)

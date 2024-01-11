@@ -54,7 +54,6 @@ problems_CEC = {'DF1': get_problem('df1', n_var=10),
 
 
 
-
 """Problem Bounds"""
 def get_bounds(problem:str) -> dict:
     if problem.startswith('DF'):
@@ -73,9 +72,11 @@ def get_bounds(problem:str) -> dict:
         "mean":arr.mean(axis=0),
         "std":arr.std(axis=0)
     }
-    return eval_dict
+    return print(eval_dict)
 
-problem_bounds = {'dtlz1': {'val': [(0.0, 490.0), (0.0, 485.0), (0.0, 501.0)], 'mean': [67.7, 67.7, 135.7], 'std': [65.4, 64.3, 90.8]},
+
+
+problem_bounds = {'dtlz1': {'val': [(0.0, 450), (0, 460.0), (0.0, 490.0)], 'mean': [67.8, 68.7, 135.7], 'std': [65.4, 64.3, 90.8]},
              'dtlz2': {'val': [(0.0, 2.61), (0.0, 2.63), (0.0, 2.71)], 'mean': [0.75, 0.74, 1.18], 'std': [0.55, 0.55, 0.59]},
             'dtlz3': {'val': [(0.0, 1766.0), (0.0, 1802.0), (0.0, 1847.0)], 'mean': [440.3, 441.1, 690.2], 'std': [343.5, 339.5, 371.0]},
             'dtlz4': {'val': [(0.0, 3.12), (0.0, 2.53), (0.0, 2.48)], 'mean': [1.8, 0.03, 0.03], 'std': [0.28, 0.18, 0.17]},

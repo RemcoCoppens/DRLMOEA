@@ -17,7 +17,7 @@ class ReplayBuffer():
         #MISSCHIEN VOOR GENERALISABILITY WEL WEER LATEN STAAN WANT HET KAN MISSCHIEN NIET KWAAD
         #EN WIE WEET HEBBEN WE WEL EEN KEER EEN TERMINAL STATE        
         
-        self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool) # Boolean to indicate if the state is terminal
+        self.terminal_memory = np.zeros(self.mem_size, dtype=bool) # Boolean to indicate if the state is terminal
 
     def store_transition(self, state, action, reward, state_):
         """ Store the transition in the replay buffer """

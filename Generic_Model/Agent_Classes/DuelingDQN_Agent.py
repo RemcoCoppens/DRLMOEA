@@ -107,11 +107,11 @@ class Agent:
                 - pareto_size: number of individuals in the pareto front
                 """
         log = optim.logbook[gen -1]
-        avgs, mins, stds = log.select("avg", "min", "std")
+        avgs, mins, stds = log['avg'], log['min'], log['std']
 
         #normalise values
-        norm_avgs = [self.normalize(val = avgs[obj], LB = optim.obj_bounds[obj][0], UB = optim.obj_bounds[obj][1]) for obj in range(0, optim.n_obj)]
-        norm_mins = [self.normalize(val = mins[obj], LB = optim.obj_bounds[obj][0], UB = optim.obj_bounds[obj][1]) for obj in range(0, optim.n_obj)]	
+        norm_avgs = [self.normalize(val = avgs[obj], LB = optim.val_bounds[obj][0], UB = optim.val_bounds[obj][1]) for obj in range(0, optim.NBOJ)]
+        norm_mins = [self.normalize(val = mins[obj], LB = optim.val_bounds[obj][0], UB = optim.val_bounds[obj][1]) for obj in range(0, optim.NBOJ)]	
 
         # Create state representation
         state_repre = np.array([gen/optim.NGEN,
@@ -154,7 +154,10 @@ class Agent:
             action = np.random.choice(self.action_space)
         return action
 
-    
+    def retrieve_operator(self, action):
+        """ Return the selected action """
+        return self.actions[action] 
+
     def learn(self):
         """Learn from experience by a batch of interactions from the memory and replace the target network if needed"""
         #Skip learning if not enough interactions are stored in the memory

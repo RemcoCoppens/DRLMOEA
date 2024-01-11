@@ -36,7 +36,7 @@ class NSGA_III_Learning:
         self.PROBLEM = problem
         self.NBOJ = problem.n_obj
         self.NDIM = problem.n_var
-        #self.P = 12
+        self.P = 12
         self.BOUND_L, self.BOUND_U = 0.0, 1.0
         self.NGEN = num_gen
         self.POP_SIZE = pop_size
@@ -44,18 +44,18 @@ class NSGA_III_Learning:
         self.MUTPB = mut_prob
         self.MP = MP
         self.verbose = verbose
-        self.directory = self.check_results_directory()
+        #self.directory = self.check_results_directory()
         self.val_bounds = ps.problem_bounds[problem_name]['val']
         self.std_bounds = ps.problem_bounds[problem_name]['std']
         
-
         #Agent
         self.agent = Agent(lr  = 1e-4,
                            gamma = 0.99,
-                           actions = [[10.0,50.0,100.0],[10.0, 50.0, 100.0],
-                           [0.01, 0.05, 0.10, 0.15, 0.20]],
+                           actions = [[10.0,, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0],
+                                      [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0],
+                                      [0.01, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00]],
                            batch_size = 32,
-                           input_size = 7
+                           input_size = 6
                            )
         self.learn_agent = learn_agent
         if load_agent != None:
@@ -72,8 +72,6 @@ class NSGA_III_Learning:
         self.run_performance = []
         self.run_reward = []
         self.run_epsilon = []
-
-        
 
     
     def check_results_directory(self):
@@ -196,10 +194,10 @@ class NSGA_III_Learning:
         #Return a list of varied individuals that are independent of their parents
         return offspring
 
-    def call_agent (self, gen, hv, pareto_size, state = [], action = None) -> tuple:
+    def call_agent (self, gen, hv, pareto_size, state = [], action = None, prev_hv = None) -> tuple:
         """ Call the agent to retrieve the next action """
         if action == None:
-            state = self.agent.create_state_representation(optims = self,
+            state = self.agent.create_state_representation(optim = self,
                                                            gen = gen,
                                                            hv = hv,
                                                            pareto_size = pareto_size)
@@ -207,18 +205,27 @@ class NSGA_III_Learning:
             return state, self.agent.choose_action(state)
             
         else:
-            state_ = self.agent.create_state_representation(optims = self,
+            state_ = self.agent.create_state_representation(optim = self,
                                                               gen = gen,
                                                               hv = hv,
                                                               pareto_size = pareto_size)
-            
-            reward_idx = self.agent.store_transition(state = state, action = action, new_state = state_)
+            #COMMENT; DIT SLAAT NATUURLIJK NERGENS OP, MAAR DEZE REWARD FUNCTIE MOET NOG AANGEPAST WORDEN
+            if prev_hv > hv:
+                reward = -1
+            else:
+                reward = 5
+
+            idx = self.agent.store_transition(state = state, 
+                                              action = action, 
+                                              reward = reward, 
+                                              state_ = state_)
 
             if self.learn_agent:
                 self.agent.learn()
 
             state = state_
-        return state, self.action.choose_action(state), reward_idx
+
+        return reward, state, self.agent.choose_action(state), idx
     
     def _RUN(self, use_agent = True):
         """Run the NSGA-III loop until the termination criterion is met"""
@@ -286,7 +293,7 @@ class NSGA_III_Learning:
         prev_hv = self.calculate_hypervolume(pareto_front=pareto_front)
 
         #Obtain initial operator selection from agent
-        state, action= self.call_agent(gen=0, hv=hv, pareto_size=len(pareto_front))
+        state, action= self.call_agent(gen=0, hv=prev_hv, pareto_size=len(pareto_front))
         
         operator_settings = self.agent.retrieve_operator(action = action)
         #COMMENT: kijken of deze retrieve operator echt nodig is, ik zie niet zo snel waarom namelijk
@@ -335,18 +342,23 @@ class NSGA_III_Learning:
 
             """ Agent interaction """
             #Obtain next operator selection from agent
-            state, action, reward_idx = self.call_agent(gen=gen, hv=cur_hv, pareto_size=len(pareto_front), state = state, action = action)
-            
+            reward, state, action, idx = self.call_agent(gen=gen, 
+                                                         hv=cur_hv, 
+                                                         pareto_size=len(pareto_front), 
+                                                         state = state, 
+                                                         action = action, 
+                                                         prev_hv=prev_hv)
             operator_settings = self.agent.retrieve_operator(action = action)
             states_trace.append(state)
             actions_trace.append(operator_settings)
-            reward_idx_trace.append(reward_idx)
+            reward_trace.append(reward)
+            reward_idx_trace.append(idx)
             prev_hv = cur_hv
+
+
 
             #Calculate processig time of this generation
             gen_time = time.time() - gen_start
-
-
 
             """"Save results"""
             # #Save generation to file
@@ -368,16 +380,33 @@ class NSGA_III_Learning:
             pool.join()
 
         #return df
-        return states_trace[:-1], actions_trace[:-1], reward_idx_trace
+        print(len(states_trace), len(actions_trace), len(reward_trace), len(reward_idx_trace))
+
+
+        return states_trace[:-1], actions_trace[:-1], reward_trace, reward_idx_trace
 
     def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
         """ Run the NSGA-III algorithm multiple times """
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
-            _, actions, reward_idx = self._RUN()
+            _, actions, rewards, reward_idx = self._RUN()
 
+
+            # Normalize and clip performance
+            clipped_performance = max((sum(rewards)/self.NGEN), -0.5)
+            self.agent.store_reward(performance=clipped_performance,
+                                    indeces=reward_idx)
+            
+            # print('{:>10} | {:>15} | {:>15}'.format(idx, round(self.agent.epsilon,5), str(round(clipped_performance, 4))))
+            self.run_reward.append(rewards)
+            self.run_performance.append(sum(rewards))
+            self.hv_dict[idx] = self.hv_trace.copy()
+            self.hv_trace = []
+            self.run_epsilon.append(self.agent.epsilon)
+            self.policy_dict[idx] = actions 
             #normalise and clip performance
             
-            self.save_run_to_file(performance, idx, problem_name)
+            # Decay epsilon, to decrease exploration and increase exploitation
+            self.agent.epsilon_decay_exponential(idx)
         
 
 if __name__ == '__main__':
@@ -388,13 +417,15 @@ if __name__ == '__main__':
         problem = ps.problems_DEAP[problem_name]
 
     nsga = NSGA_III_Learning(problem_name = problem_name, 
-                    problem = problem, num_gen=5, 
+                    problem = problem, 
+                    num_gen=30, 
                     pop_size=20, 
                     cross_prob=1.0, 
                     mut_prob=1.0, 
-                    MP=12, 
+                    MP=0, 
                     verbose=False,
                     learn_agent=True, 
                     load_agent= None)
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=5, progressbar=True)
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=100, progressbar=True)
+
