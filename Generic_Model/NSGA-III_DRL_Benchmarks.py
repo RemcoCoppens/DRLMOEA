@@ -36,7 +36,7 @@ class NSGA_III_DRL:
         self.PROBLEM = problem
         self.NBOJ = problem.n_obj
         self.NDIM = problem.n_var
-        #self.P = 12
+        self.P = 12
         self.BOUND_L, self.BOUND_U = 0.0, 1.0
         self.NGEN = num_gen
         self.POP_SIZE = pop_size
@@ -52,12 +52,14 @@ class NSGA_III_DRL:
         #Agent
         self.agent = Agent(lr  = 1e-4, #learning rate
                            gamma = 0.99, #discount factor
-                           actions = [[10.0, 50.0, 100.0],
-                           [0.01, 0.05, 0.10, 0.15, 0.20]], #two actions spaces, should be three
+                           actions = [[0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
+                                      [0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
+                                      [0.01, 0.20, 0.40, 0.60, 0.80, 1.00]], 
                            batch_size = 32, #batch size for training the neural network
-                           input_size = 7 #number of features in state representation
+                           input_size = 6 #number of features in state representation
                            )
         self.learn_agent = learn_agent
+        self.load_agent = load_agent
         if load_agent != None:
             self.agent.load_model(fname = f'{load_agent}.h5')
             self.agent.epsilon = 0
@@ -88,7 +90,7 @@ class NSGA_III_DRL:
             return 'NSGA-III_DRL'   
     
     
-    def save_generation(self, gen, population, avg_eval_time, gen_time, pareto, hv, final_pop=None, alg_exec_time=None):
+    def save_generation(self, gen, population, avg_eval_time, pareto, hv, final_pop=None, alg_exec_time=None):
         """ Save performance of generation to file """
         # Summarize performance in dictionary object and save to file
         performance_dict = {}
@@ -96,7 +98,6 @@ class NSGA_III_DRL:
         performance_dict['pareto_front'] = [pareto]
         performance_dict['hypervolume'] = hv
         performance_dict['avg_eval_time'] = avg_eval_time
-        performance_dict['gen_time'] = gen_time
         performance_dict['avg_obj'] = [self.logbook[gen]['avg']]
         performance_dict['max_obj'] = [self.logbook[gen]['max']]
         performance_dict['min_obj'] = [self.logbook[gen]['min']]
@@ -110,7 +111,7 @@ class NSGA_III_DRL:
     
     def save_run_to_file(self, performance, run, problem_name):
         """ Save performance of run to file """
-        file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_Run_{run}'}.pkl", "wb")
+        file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_Run_{run}_POP_size_{self.POP_SIZE}_{self.load_agent}'}.pkl", "wb")
         pickle.dump(performance, file)
         file.close()
         
@@ -194,10 +195,10 @@ class NSGA_III_DRL:
         #Return a list of varied individuals that are independent of their parents
         return offspring
 
-    def call_agent (self, gen, hv, pareto_size, state = [], action = None) -> tuple:
+    def call_agent (self, gen, hv, pareto_size, state = [], action = None, prev_hv = None) -> tuple:
         """ Call the agent to retrieve the next action """
         if action == None:
-            state = self.agent.create_state_representation(optims = self,
+            state = self.agent.create_state_representation(optim = self,
                                                            gen = gen,
                                                            hv = hv,
                                                            pareto_size = pareto_size)
@@ -205,18 +206,21 @@ class NSGA_III_DRL:
             return state, self.agent.choose_action(state)
             
         else:
-            state_ = self.agent.create_state_representation(optims = self,
+            state_ = self.agent.create_state_representation(optim = self,
                                                               gen = gen,
                                                               hv = hv,
                                                               pareto_size = pareto_size)
-            
-            reward_idx = self.agent.store_transition(state = state, action = action, new_state = state_)
+
+            idx = self.agent.store_transition(state = state, 
+                                              action = action,  
+                                              state_ = state_)
 
             if self.learn_agent:
                 self.agent.learn()
 
             state = state_
-        return state, self.action.choose_action(state), reward_idx
+
+        return state, self.agent.choose_action(state), idx
     
     def _RUN(self, use_agent = True):
         """Run the NSGA-III loop until the termination criterion is met"""
@@ -283,16 +287,14 @@ class NSGA_III_DRL:
         prev_hv = self.calculate_hypervolume(pareto_front=pareto_front)
 
         #Obtain initial operator selection from agent
-        state, action= self.call_agent(gen=0, hv=hv, pareto_size=len(pareto_front))
+        state, action= self.call_agent(gen=0, hv=prev_hv, pareto_size=len(pareto_front))
         
         operator_settings = self.agent.retrieve_operator(action = action)
-        #COMMENT: kijken of deze retrieve operator echt nodig is, ik zie niet zo snel waarom namelijk
-        #Het lijkt me dat de action de juiste action al terugkeert
         states_trace.append(state)
         actions_trace.append(operator_settings)
 
         #Save generation to file
-        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, gen_time=0, pareto = pareto_front, hv = hv)
+        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv)
         df = pd.DataFrame(save_gen)
 
         """Evolutionary process"""
@@ -332,29 +334,31 @@ class NSGA_III_DRL:
 
             """ Agent interaction """
             #Obtain next operator selection from agent
-            state, action, reward_idx = self.call_agent(gen=gen, hv=cur_hv, pareto_size=len(pareto_front), state = state, action = action)
-            
+            state, action, idx = self.call_agent(gen=gen, 
+                                                         hv=cur_hv, 
+                                                         pareto_size=len(pareto_front), 
+                                                         state = state, 
+                                                         action = action, 
+                                                         prev_hv=prev_hv)
+
             operator_settings = self.agent.retrieve_operator(action = action)
+
             states_trace.append(state)
             actions_trace.append(operator_settings)
-            reward_idx_trace.append(reward_idx)
+
+            reward_idx_trace.append(idx)
             prev_hv = cur_hv
-
-            #Calculate processig time of this generation
-            gen_time = time.time() - gen_start
-
-
-
+            
             """"Save results"""
             #Save generation to file
             if gen!= self.NGEN:
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv)
+                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv)
                 df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
             
             #Final generation
             else:
                 algorithm_execution_time = time.time() - Start_timer
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv,
+                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv,
                                              final_pop=1,
                                              alg_exec_time=algorithm_execution_time) 
                 df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
@@ -369,9 +373,11 @@ class NSGA_III_DRL:
     def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
         """ Run the NSGA-III algorithm multiple times """
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
-            performance = self._RUN()
-            self.save_run_to_file(performance, idx, problem_name)
-        
+            df = self._RUN()
+            self.save_run_to_file(df, idx, problem_name)
+            
+
+
 
 if __name__ == '__main__':
     problem_name = 'dtlz2'
@@ -381,14 +387,15 @@ if __name__ == '__main__':
         problem = ps.problems_DEAP[problem_name]
 
     nsga = NSGA_III_DRL(problem_name = problem_name, 
-                    problem = problem, num_gen=5, 
+                    problem = problem, 
+                    num_gen=100, 
                     pop_size=20, 
                     cross_prob=1.0, 
                     mut_prob=1.0, 
-                    MP=10, 
+                    MP=0, 
                     verbose=False,
                     learn_agent=False, 
-                    load_agent= None)
+                    load_agent= 'Lastmodel_dtlz2')
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=5, progressbar=True)
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
 

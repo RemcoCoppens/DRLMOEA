@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 
 class DuelingDQN(nn.Module):
@@ -32,26 +33,28 @@ class DuelingDQN(nn.Module):
             value = self.V(x)	
             advantage = self.A(x)
 
-            q_values = value + (advantage - advantage.mean(dim=1, keepdim=True))
+
+            q_values = (value + (advantage - torch.mean(advantage)))
             return q_values
         
         else: 
             with torch.no_grad():
-                x = F.relu(self.lin_1(STATE))
-                x = F.relu(self.lin_2(x))   
+                x = F.relu(self.fc1(STATE))
+                x = F.relu(self.fc2(x))   
     
-                value = self.V(x)	
-                advantage = self.A(x)
+                value = self.V(x).numpy()
+                advantage = self.A(x).numpy()
 
-                q_values = value + (advantage - advantage.mean(dim=1, keepdim=True))
+                #q_values = (value + (advantage - advantage.mean(dim=1, keepdim=True)))
+                q_values= (value+(advantage - np.mean(advantage)))
                 return q_values
     
     def get_advantages(self, state):
         """function to retrieve the advantage values for a given state"""
         STATE = torch.Tensor(state)
         with torch.no_grad():
-            x = F.relu(self.lin_1(STATE))
-            x = F.relu(self.lin_2(x))   
+            x = F.relu(self.fc1(STATE))
+            x = F.relu(self.fc2(x))   
             advantage = self.A(x)
             return advantage
          

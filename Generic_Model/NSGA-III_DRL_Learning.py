@@ -51,9 +51,9 @@ class NSGA_III_Learning:
         #Agent
         self.agent = Agent(lr  = 1e-4,
                            gamma = 0.99,
-                           actions = [[10.0,, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0],
-                                      [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0],
-                                      [0.01, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00]],
+                           actions = [[0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
+                                      [0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
+                                      [0.01, 0.20, 0.40, 0.60, 0.80, 1.00]],
                            batch_size = 32,
                            input_size = 6
                            )
@@ -209,15 +209,11 @@ class NSGA_III_Learning:
                                                               gen = gen,
                                                               hv = hv,
                                                               pareto_size = pareto_size)
-            #COMMENT; DIT SLAAT NATUURLIJK NERGENS OP, MAAR DEZE REWARD FUNCTIE MOET NOG AANGEPAST WORDEN
-            if prev_hv > hv:
-                reward = -1
-            else:
-                reward = 5
+            
+            reward = hv 
 
             idx = self.agent.store_transition(state = state, 
-                                              action = action, 
-                                              reward = reward, 
+                                              action = action,  
                                               state_ = state_)
 
             if self.learn_agent:
@@ -226,7 +222,7 @@ class NSGA_III_Learning:
             state = state_
 
         return reward, state, self.agent.choose_action(state), idx
-    
+
     def _RUN(self, use_agent = True):
         """Run the NSGA-III loop until the termination criterion is met"""
         """Initialization"""
@@ -296,8 +292,6 @@ class NSGA_III_Learning:
         state, action= self.call_agent(gen=0, hv=prev_hv, pareto_size=len(pareto_front))
         
         operator_settings = self.agent.retrieve_operator(action = action)
-        #COMMENT: kijken of deze retrieve operator echt nodig is, ik zie niet zo snel waarom namelijk
-        #Het lijkt me dat de action de juiste action al terugkeert
         states_trace.append(state)
         actions_trace.append(operator_settings)
 
@@ -348,40 +342,23 @@ class NSGA_III_Learning:
                                                          state = state, 
                                                          action = action, 
                                                          prev_hv=prev_hv)
+
             operator_settings = self.agent.retrieve_operator(action = action)
+
             states_trace.append(state)
             actions_trace.append(operator_settings)
             reward_trace.append(reward)
             reward_idx_trace.append(idx)
             prev_hv = cur_hv
 
-
-
             #Calculate processig time of this generation
             gen_time = time.time() - gen_start
 
-            """"Save results"""
-            # #Save generation to file
-            # if gen!= self.NGEN:
-            #     save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv)
-            #     df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-            
-            # #Final generation
-            # else:
-            #     algorithm_execution_time = time.time() - Start_timer
-            #     save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv,
-            #                                  final_pop=1,
-            #                                  alg_exec_time=algorithm_execution_time) 
-            #     df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-            #     display(df)
         # Close the multiprocessing pool if used
         if self.MP > 0:
             pool.close()
             pool.join()
-
-        #return df
-        print(len(states_trace), len(actions_trace), len(reward_trace), len(reward_idx_trace))
-
+        
 
         return states_trace[:-1], actions_trace[:-1], reward_trace, reward_idx_trace
 
@@ -390,21 +367,37 @@ class NSGA_III_Learning:
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
             _, actions, rewards, reward_idx = self._RUN()
 
-
             # Normalize and clip performance
+            performance= sum(rewards)
+            #performance_delendoorgen= sum(rewards)/self.NGEN
+            print('performance', performance)
+            #print('performance delendoor', performance_delendoorgen)
             clipped_performance = max((sum(rewards)/self.NGEN), -0.5)
+            print('clipped performance', clipped_performance)
             self.agent.store_reward(performance=clipped_performance,
-                                    indeces=reward_idx)
+                                   runs=reward_idx)
             
             # print('{:>10} | {:>15} | {:>15}'.format(idx, round(self.agent.epsilon,5), str(round(clipped_performance, 4))))
             self.run_reward.append(rewards)
-            self.run_performance.append(sum(rewards))
+            
+            #self.run_performance.append(sum(rewards))
             self.hv_dict[idx] = self.hv_trace.copy()
             self.hv_trace = []
             self.run_epsilon.append(self.agent.epsilon)
             self.policy_dict[idx] = actions 
             #normalise and clip performance
             
+            #save models
+            
+            #IF STATEMENT TO SAVE BEST MODEL 
+            if clipped_performance > self.agent.best_performance:
+                print('best performance', self.agent.best_performance)
+                self.agent.best_performance = clipped_performance
+                self.agent.save_model(fname = f'Bestmodel_lageobj_{problem_name}.h5')
+
+
+            #Save last model
+            self.agent.save_model(fname = f'Lastmodel_lageobj_{problem_name}.h5')
             # Decay epsilon, to decrease exploration and increase exploitation
             self.agent.epsilon_decay_exponential(idx)
         
@@ -418,7 +411,7 @@ if __name__ == '__main__':
 
     nsga = NSGA_III_Learning(problem_name = problem_name, 
                     problem = problem, 
-                    num_gen=30, 
+                    num_gen=100, 
                     pop_size=20, 
                     cross_prob=1.0, 
                     mut_prob=1.0, 
@@ -427,5 +420,5 @@ if __name__ == '__main__':
                     learn_agent=True, 
                     load_agent= None)
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=100, progressbar=True)
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=2000, progressbar=True)
 

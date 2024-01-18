@@ -10,6 +10,7 @@ from copy import deepcopy
 from scipy.spatial import distance
 import matplotlib.pyplot as plt
 
+
 from deap import base, creator, tools, algorithms
 from deap.benchmarks.tools import hypervolume, igd
 
@@ -83,11 +84,12 @@ class NSGA_III:
         if final_pop != None and alg_exec_time != None:
             performance_dict['algorithm_execution_time'] = alg_exec_time
 
+
         return performance_dict
     
     def save_run_to_file(self, performance, run, problem_name):
         """ Save performance of run to file """
-        file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_Run_{run}_Gens_{self.NGEN}'}.pkl", "wb")
+        file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_Run_{run}_Gens_{self.NGEN}_POP_size_{self.POP_SIZE}'}.pkl", "wb")
         pickle.dump(performance, file)
         file.close()
 
@@ -204,7 +206,7 @@ class NSGA_III:
 
             #Select the next population from parent and offspring
             pop = toolbox.select(pop + offspring, self.POP_SIZE)
-            print(pop)
+            
             #Compile statistics about the new population
             record = stats.compile(pop)
             self.logbook.record(gen=gen, evals=len(invalid_ind), **record)
@@ -244,15 +246,22 @@ class NSGA_III:
             self.save_run_to_file(performance, idx, problem_name)
 
 if __name__ == '__main__':
-    problem_name = 'DF1'
+    problem_name = 'dtlz2'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
         problem = ps.problems_DEAP[problem_name]
 
-    generations = [30]
+    generations = [100]
     for i in generations:
-        nsga = NSGA_III(problem_name = problem_name, problem = problem, num_gen=i, pop_size=5, cross_prob=1.0, mut_prob=1.0, MP=10, verbose=False)
+        nsga = NSGA_III(problem_name = problem_name, 
+                        problem = problem, 
+                        num_gen=i, 
+                        pop_size=20, 
+                        cross_prob=1.0, 
+                        mut_prob=1.0, 
+                        MP=10, 
+                        verbose=False)
     
         nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
 

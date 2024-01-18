@@ -29,7 +29,7 @@ class Agent:
     """
     def __init__(self, lr, gamma, actions, batch_size, input_size, 
                  epsilon=1.0, eps_dec_lin=1e-4, eps_dec_exp=0.998, 
-                 eps_end=1e-2, mem_size=100000, fname='DDQN.h5', 
+                 eps_end=1e-2, mem_size=100000, fname='DDQN_test1.h5', 
                  FCL1_layer=32, FCL2_layer=64, replace=100):
         # Initiate agent characteristics
         self.lr = lr
@@ -55,10 +55,10 @@ class Agent:
         self.action_space = [i for i in range(n_actions)]
         
         # Initialize Online Evaluation Network
-        self.q_online_network = DuelingDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
+        self.q_online_network = DuelingDQN(input_size, n_actions, FCL1_layer, FCL2_layer)
 
         # Initialize Target Network for action selection
-        self.q_target_network = DuelingDQN(n_actions, input_size, FCL1_layer, FCL2_layer)
+        self.q_target_network = DuelingDQN(input_size, n_actions, FCL1_layer, FCL2_layer)
         
         # Set criterion and optimizer
         self.criterion = torch.nn.MSELoss()
@@ -66,6 +66,7 @@ class Agent:
         
         # Reward tracker for reference induced reward calculation
         self.reward_reference = []
+        self.best_performance = 0
 
     def save_model(self, fname = None):
         """Save the model weights of the target network to the given file."""
@@ -83,13 +84,18 @@ class Agent:
             self.q_online_network.load_state_dict(torch.load(os.path.join(os.getcwd() + '/Model_Saves', fname)))    
             self.q_target_network.load_state_dict(torch.load(os.path.join(os.getcwd() + '/Model_Saves', fname)))
 
-    def store_transition(self, state, action, reward, state_):
+    def store_transition(self, state, action, state_):
         """Store the interaction in the memory"""
-        return self.memory.store_transition(state, action, reward, state_)
-
+        return self.memory.store_transition(state, action, state_)
+    
+    def store_reward(self, performance, runs):
+        """Store reward of the agent"""
+        self.memory.reward_memory[runs] = performance
+        self.reward_counter += len(runs)
+        
     def epsilon_decay_exponential(self, run):
         """Decay the epsilon value exponentially"""
-        self.epsilon = max(selfs.eps_start * self.eps_dec_exp**(run-1), self.eps_end)
+        self.epsilon = max(self.eps_start * self.eps_dec_exp**(run-1), self.eps_end)
 
     def normalize(self, val, LB, UB, clip=True):
         """ Apply (bounded) normalization on the given value using the given bounds (LB, UB) """
@@ -147,9 +153,9 @@ class Agent:
         """
         #with probability epsilon, choose an aciton based on advantages values or choose random action
         if np.random.random() > self.epsilon:
-            state = torch.tensor(state, dtype=torch.float).to(self.q_online_network.device)
+            state = np.array([state])
             advantages = self.q_online_network.get_advantages(state)
-            action = torch.argmax(advantages).item()
+            action = np.argmax(advantages)
         else:
             action = np.random.choice(self.action_space)
         return action
@@ -161,9 +167,9 @@ class Agent:
     def learn(self):
         """Learn from experience by a batch of interactions from the memory and replace the target network if needed"""
         #Skip learning if not enough interactions are stored in the memory
-        if self.memory.mem_cntr < self.batch_size:
+        if self.reward_counter < self.batch_size:
             return
-        
+        print(self.learn_step_counter)
         #Replace the target network with the online network if needed
         if self.learn_step_counter % self.replace == 0:
             self.q_target_network.load_state_dict(self.q_online_network.state_dict())
@@ -173,14 +179,15 @@ class Agent:
 
         #Conduct forward pass of online network
         q_pred = self.q_online_network.forward(states, req_grad = False)
-        
+ 
         #Conduct forward pass of target network
-        q_next = self.q_target_network.forward(states_, req_grad = False)
+        q_next = np.max(self.q_target_network.forward(states_, req_grad = False), axis = 1 )
 
         #Create target values
         q_target = np.copy(q_pred)
+        #q_target = rewards + self.gamma * q_next
 
-        #Loop through all states
+  
         for idx in range(len(states)):
             #Update target value for the action taken
             q_target[idx, actions[idx]] = rewards[idx] + self.gamma * q_next[idx]
@@ -193,10 +200,10 @@ class Agent:
         self.optimizer.zero_grad()
 
         # Conduct forward pass of the states through the network
-        out = self.q_eval.forward(states)
+        out = self.q_online_network.forward(states)
         
         # Calculate the loss compared to the target values and backpropagate the loss
-        loss = self.criterion(out, q_target)
+        loss = self.criterion(out, q_target) #LOSS(INPUT,target)
         loss.backward()
         
         # Update the parameters
