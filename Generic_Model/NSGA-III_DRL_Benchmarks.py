@@ -18,6 +18,9 @@ import Benchmark_Problem_Suites as ps
 from tqdm import tqdm
 import pickle
 
+import shap
+import torch
+
 class NSGA_III_DRL:
     """
     Description: Class for the NSGA-III algorithm
@@ -368,16 +371,20 @@ class NSGA_III_DRL:
             pool.close()
             pool.join()
 
-        return df
+        return df, states_trace, actions_trace, reward_idx_trace
     
-    def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
+    def multiple_runs(self, problem_name, nr_of_runes, progressbar = False, shapley = False):
         """ Run the NSGA-III algorithm multiple times """
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
-            df = self._RUN()
+            df, states, actions, reward_idx = self._RUN()
             self.save_run_to_file(df, idx, problem_name)
+            if shapley == True:
+                states = np.array(states)
+                states_tensor = torch.stack([torch.Tensor(i) for i in states])
+                explainer = shap.DeepExplainer(self.agent.q_online_network, states_tensor)
+                shap_values = explainer.shap_values(states_tensor, check_additivity=False)
+                shap.summary_plot(shap_values, states_tensor)
             
-
-
 
 if __name__ == '__main__':
     problem_name = 'dtlz2'
@@ -395,7 +402,7 @@ if __name__ == '__main__':
                     MP=0, 
                     verbose=False,
                     learn_agent=False, 
-                    load_agent= 'Lastmodel_dtlz2')
+                    load_agent= 'Bestmodel_19-01-2024_dtlz2')
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=1, progressbar=True, shapley = True)
 

@@ -3,6 +3,7 @@ from deap import benchmarks
 from pymoo.problems import get_problem
 import numpy as np
 import random
+import matplotlib.pyplot as plt
 
 "Benchmark problem suites "
 "DEAP Framework"
@@ -66,6 +67,8 @@ def get_bounds(problem:str) -> dict:
 
     evals = [problem.evaluate(np.array([random.random() for _ in range(var)])) for _ in range(100000)]
     arr = np.array(evals)
+    plt.boxplot(arr)
+    plt.show()
     eval_dict = {
         "min":arr.min(axis=0),
         "max":arr.max(axis=0),
@@ -78,7 +81,8 @@ def get_bounds(problem:str) -> dict:
 
 problem_bounds = {'dtlz1': {'val': [(0.0, 450), (0, 460.0), (0.0, 490.0)], 'mean': [67.8, 68.7, 135.7], 'std': [65.4, 64.3, 90.8]},
              #'dtlz2': {'val': [(0.0, 2.61), (0.0, 2.63), (0.0, 2.71)], 'mean': [0.75, 0.74, 1.18], 'std': [0.55, 0.55, 0.59]},
-            'dtlz2': {'val': [(0.0, 3.00), (0.0, 3.00), (0.0, 4.00)], 'mean': [1.55, 1.55, 2.44], 'std': [0.55, 0.55, 0.59]}, 
+            'dtlz2': {'val': [(0.0, 2.50), (0.0, 2.50), (0.0, 3.50)], 'mean': [1.55, 1.55, 2.44], 'std': [0.55, 0.55, 0.59]}, 
+            #'dtlz2': {'val': [(0.0, 3.00), (0.0, 3.00), (0.0, 4.00)], 'mean': [1.55, 1.55, 2.44], 'std': [0.55, 0.55, 0.59]},
             #'dtlz2': {'val': [(0.0, 5.00), (0.0, 5.00), (0.0, 5.00)], 'mean': [1.55, 1.55, 2.44], 'std': [1.14, 1.14, 1.21]},
             'dtlz3': {'val': [(0.0, 1766.0), (0.0, 1802.0), (0.0, 1847.0)], 'mean': [440.3, 441.1, 690.2], 'std': [343.5, 339.5, 371.0]},
             'dtlz4': {'val': [(0.0, 3.12), (0.0, 2.53), (0.0, 2.48)], 'mean': [1.8, 0.03, 0.03], 'std': [0.28, 0.18, 0.17]},

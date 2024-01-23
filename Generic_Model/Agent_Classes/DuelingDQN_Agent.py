@@ -119,7 +119,7 @@ class Agent:
         norm_avgs = [self.normalize(val = avgs[obj], LB = optim.val_bounds[obj][0], UB = optim.val_bounds[obj][1]) for obj in range(0, optim.NBOJ)]
         norm_mins = [self.normalize(val = mins[obj], LB = optim.val_bounds[obj][0], UB = optim.val_bounds[obj][1]) for obj in range(0, optim.NBOJ)]	
 
-        # Create state representation
+        # Create state representation first version
         state_repre = np.array([gen/optim.NGEN,
                                 min(1.0, optim.stagnation_counter/10),
                                 np.mean(norm_avgs),
@@ -127,6 +127,11 @@ class Agent:
                                 hv,
                                 pareto_size/optim.POP_SIZE]).flatten() 
         
+        # Create state representation with all features from previous literature
+        # state_repre = np.array([gen/optim.NGEN,
+                                
+        # ]).flatten()
+
         return state_repre
 
     def create_action_space(self, as1, as2, as3):
@@ -169,7 +174,7 @@ class Agent:
         #Skip learning if not enough interactions are stored in the memory
         if self.reward_counter < self.batch_size:
             return
-        print(self.learn_step_counter)
+        
         #Replace the target network with the online network if needed
         if self.learn_step_counter % self.replace == 0:
             self.q_target_network.load_state_dict(self.q_online_network.state_dict())

@@ -230,8 +230,8 @@ class NSGA_III_Learning:
         creator.create("FitnessMulti", base.Fitness, weights=(-1.0,)*self.NBOJ)
         creator.create("Individual", np.ndarray , fitness=creator.FitnessMulti)
         
-        print(f'Problem: {self.PROBLEM}')
-        print(f'---start NSGA-III Run for {self.NGEN} generations and a population of size {self.POP_SIZE} distributing work over {self.MP} cores ---')
+        #print(f'Problem: {self.PROBLEM}')
+        #print(f'---start NSGA-III Run for {self.NGEN} generations and a population of size {self.POP_SIZE} distributing work over {self.MP} cores ---')
         #Start time
         Start_timer = time.time()
 
@@ -351,6 +351,9 @@ class NSGA_III_Learning:
             reward_idx_trace.append(idx)
             prev_hv = cur_hv
 
+            
+
+
             #Calculate processig time of this generation
             gen_time = time.time() - gen_start
 
@@ -366,18 +369,19 @@ class NSGA_III_Learning:
         """ Run the NSGA-III algorithm multiple times """
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
             _, actions, rewards, reward_idx = self._RUN()
-
+            print(idx)
             # Normalize and clip performance
             performance= sum(rewards)
-            #performance_delendoorgen= sum(rewards)/self.NGEN
-            print('performance', performance)
-            #print('performance delendoor', performance_delendoorgen)
+            
             clipped_performance = max((sum(rewards)/self.NGEN), -0.5)
-            print('clipped performance', clipped_performance)
+            
             self.agent.store_reward(performance=clipped_performance,
                                    runs=reward_idx)
-            
-            # print('{:>10} | {:>15} | {:>15}'.format(idx, round(self.agent.epsilon,5), str(round(clipped_performance, 4))))
+            if idx ==nr_of_runes:
+                print('{:>10} | {:>15} | {:>15}'.format("Episode", "Epsilon", "Total Reward"))
+                print('{:>10} | {:>15} | {:>15}'.format(idx, round(self.agent.epsilon,5), str(round(clipped_performance, 4))))
+                end_time = (time.time() - start_time)
+                print(end_time)
             self.run_reward.append(rewards)
             
             #self.run_performance.append(sum(rewards))
@@ -385,6 +389,7 @@ class NSGA_III_Learning:
             self.hv_trace = []
             self.run_epsilon.append(self.agent.epsilon)
             self.policy_dict[idx] = actions 
+
             #normalise and clip performance
             
             #save models
@@ -393,11 +398,11 @@ class NSGA_III_Learning:
             if clipped_performance > self.agent.best_performance:
                 print('best performance', self.agent.best_performance)
                 self.agent.best_performance = clipped_performance
-                self.agent.save_model(fname = f'Bestmodel_lageobj_{problem_name}.h5')
+                self.agent.save_model(fname = f'Bestmodel_23-01-2024_{problem_name}.h5')
 
 
             #Save last model
-            self.agent.save_model(fname = f'Lastmodel_lageobj_{problem_name}.h5')
+            self.agent.save_model(fname = f'Lastmodel_23-01-2024_{problem_name}.h5')
             # Decay epsilon, to decrease exploration and increase exploitation
             self.agent.epsilon_decay_exponential(idx)
         
@@ -415,10 +420,12 @@ if __name__ == '__main__':
                     pop_size=20, 
                     cross_prob=1.0, 
                     mut_prob=1.0, 
-                    MP=0, 
+                    MP=8, 
                     verbose=False,
                     learn_agent=True, 
                     load_agent= None)
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=2000, progressbar=True)
+    start_time = time.time()
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=50, progressbar=False)
+
 

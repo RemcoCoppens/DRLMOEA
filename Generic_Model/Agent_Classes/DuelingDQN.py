@@ -23,11 +23,11 @@ class DuelingDQN(nn.Module):
     
 
     def forward(self, state, req_grad = True):
-        STATE = torch.Tensor(state)
+        state = torch.Tensor(state)
         
         #For training, keep track of gradients, for evaluation, don't
         if req_grad: 
-            x = F.relu(self.fc1(STATE))
+            x = F.relu(self.fc1(state))
             x = F.relu(self.fc2(x))   
     
             value = self.V(x)	
@@ -39,7 +39,7 @@ class DuelingDQN(nn.Module):
         
         else: 
             with torch.no_grad():
-                x = F.relu(self.fc1(STATE))
+                x = F.relu(self.fc1(state))
                 x = F.relu(self.fc2(x))   
     
                 value = self.V(x).numpy()

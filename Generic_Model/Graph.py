@@ -46,8 +46,11 @@ def plot_hypervolume(problem_name, run, directory, gens, load_model):
         plt.savefig(f'Results/{directory}/{problem_name}_Gens_{gens}_{load_model}.png') 
     
     plt.show()
+
 doc = plot_hypervolume(problem_name= "dtlz2", 
                        run = 10, 
-                       directory = "NSGA-III_DRL", 
+                       directory = "NSGA-III_test", 
                        gens =100,
-                       load_model = 'Lastmodel_dtlz2')
+                       load_model = None)
+
+

@@ -260,7 +260,7 @@ if __name__ == '__main__':
                         pop_size=20, 
                         cross_prob=1.0, 
                         mut_prob=1.0, 
-                        MP=10, 
+                        MP=0, 
                         verbose=False)
     
         nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
