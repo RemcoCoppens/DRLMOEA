@@ -107,7 +107,7 @@ class NSGA_III:
                                               first_front_only=True)[0]
         
         indivs = [list(np.array(indiv.fitness.values)) for indiv in population]
-        
+       
         return [np.array(indiv.fitness.values) for indiv in pareto_front]
     
     def calculate_hypervolume(self, pareto_front) -> float:

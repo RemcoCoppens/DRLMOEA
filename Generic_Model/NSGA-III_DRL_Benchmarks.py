@@ -57,10 +57,10 @@ class NSGA_III_DRL:
                            gamma = 0.99, #discount factor
                            actions = [[0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
                                       [0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
-                                      [0.01, 0.20, 0.40, 0.60, 0.80, 1.00]], 
+                                      [0.01, 0.2, 0.4, 0.6, 0.8, 1.0]], 
                            batch_size = 32, #batch size for training the neural network
-                           input_size = 6 #number of features in state representation
-                           )
+                           input_size = 6, #number of features in state representation
+                           replace= self.NGEN *100) #number of steps before updating target network
         self.learn_agent = learn_agent
         self.load_agent = load_agent
         if load_agent != None:
@@ -198,13 +198,14 @@ class NSGA_III_DRL:
         #Return a list of varied individuals that are independent of their parents
         return offspring
 
-    def call_agent (self, gen, hv, pareto_size, state = [], action = None, prev_hv = None) -> tuple:
+    def call_agent (self, gen, hv, pareto_size, pareto_front, state = [], action = None, prev_hv = None) -> tuple:
         """ Call the agent to retrieve the next action """
         if action == None:
             state = self.agent.create_state_representation(optim = self,
                                                            gen = gen,
                                                            hv = hv,
-                                                           pareto_size = pareto_size)
+                                                           pareto_size = pareto_size,
+                                                           pareto_front = pareto_front)
 
             return state, self.agent.choose_action(state)
             
@@ -212,7 +213,8 @@ class NSGA_III_DRL:
             state_ = self.agent.create_state_representation(optim = self,
                                                               gen = gen,
                                                               hv = hv,
-                                                              pareto_size = pareto_size)
+                                                              pareto_size = pareto_size,
+                                                              pareto_front = pareto_front)
 
             idx = self.agent.store_transition(state = state, 
                                               action = action,  
@@ -290,7 +292,7 @@ class NSGA_III_DRL:
         prev_hv = self.calculate_hypervolume(pareto_front=pareto_front)
 
         #Obtain initial operator selection from agent
-        state, action= self.call_agent(gen=0, hv=prev_hv, pareto_size=len(pareto_front))
+        state, action= self.call_agent(gen=0, hv=prev_hv, pareto_size=len(pareto_front), pareto_front = pareto_front)
         
         operator_settings = self.agent.retrieve_operator(action = action)
         states_trace.append(state)
@@ -342,7 +344,8 @@ class NSGA_III_DRL:
                                                          pareto_size=len(pareto_front), 
                                                          state = state, 
                                                          action = action, 
-                                                         prev_hv=prev_hv)
+                                                         prev_hv=prev_hv,
+                                                         pareto_front=pareto_front)
 
             operator_settings = self.agent.retrieve_operator(action = action)
 
@@ -380,13 +383,26 @@ class NSGA_III_DRL:
             self.save_run_to_file(df, idx, problem_name)
             if shapley == True:
                 states = np.array(states)
+                statesnames = ['gen', 'stag_count', 'mean', 'min', 'hv', 'pareto_size']
+                classnames = self.agent.actions
+                print(classnames)
                 states_tensor = torch.stack([torch.Tensor(i) for i in states])
                 explainer = shap.DeepExplainer(self.agent.q_online_network, states_tensor)
                 shap_values = explainer.shap_values(states_tensor, check_additivity=False)
-                shap.summary_plot(shap_values, states_tensor)
+                shap.summary_plot(shap_values, states_tensor, feature_names=statesnames)
+                #plt.savefig(f'Results/{self.directory}/Problem_{problem_name}_Run_{idx}_POP_size_{self.POP_SIZE}_{self.load_agent}_shapley.png')
             
 
 if __name__ == '__main__':
+    def policy_graph():
+        return
+    
+
+    def states_graph():
+        return
+
+
+
     problem_name = 'dtlz2'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
@@ -402,7 +418,7 @@ if __name__ == '__main__':
                     MP=0, 
                     verbose=False,
                     learn_agent=False, 
-                    load_agent= 'Bestmodel_19-01-2024_dtlz2')
+                    load_agent= 'Lastmodel_24-01-2024_test2_dtlz2')
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=1, progressbar=True, shapley = True)
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True, shapley = False)
 

@@ -53,10 +53,11 @@ class NSGA_III_Learning:
                            gamma = 0.99,
                            actions = [[0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
                                       [0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
-                                      [0.01, 0.20, 0.40, 0.60, 0.80, 1.00]],
+                                      [0.01, 0.2, 0.4, 0.6, 0.8, 1.0]],
                            batch_size = 32,
-                           input_size = 6
-                           )
+                           input_size = 6,
+                           replace = self.NGEN*100)
+                           
         self.learn_agent = learn_agent
         if load_agent != None:
             self.agent.load_model(fname = f'{load_agent}.h5')
@@ -69,9 +70,11 @@ class NSGA_III_Learning:
         self.hv_dict = {}
         self.policy_dict = {}
         
+        
         self.run_performance = []
         self.run_reward = []
         self.run_epsilon = []
+        self.bestperformancedict= {}
 
     
     def check_results_directory(self):
@@ -194,13 +197,14 @@ class NSGA_III_Learning:
         #Return a list of varied individuals that are independent of their parents
         return offspring
 
-    def call_agent (self, gen, hv, pareto_size, state = [], action = None, prev_hv = None) -> tuple:
+    def call_agent (self, gen, hv, pareto_size, pareto_front, state = [], action = None, prev_hv = None) -> tuple:
         """ Call the agent to retrieve the next action """
         if action == None:
             state = self.agent.create_state_representation(optim = self,
                                                            gen = gen,
                                                            hv = hv,
-                                                           pareto_size = pareto_size)
+                                                           pareto_size = pareto_size, 
+                                                           pareto_front = pareto_front )
 
             return state, self.agent.choose_action(state)
             
@@ -208,7 +212,8 @@ class NSGA_III_Learning:
             state_ = self.agent.create_state_representation(optim = self,
                                                               gen = gen,
                                                               hv = hv,
-                                                              pareto_size = pareto_size)
+                                                              pareto_size = pareto_size,
+                                                              pareto_front = pareto_front)
             
             reward = hv 
 
@@ -240,7 +245,7 @@ class NSGA_III_Learning:
         actions_trace = []
         reward_trace = []
         reward_idx_trace = []
-
+        
         #Set up the toolbox for individuals and population
         toolbox = base.Toolbox()
         toolbox.register('attr_float', random.random)
@@ -289,7 +294,7 @@ class NSGA_III_Learning:
         prev_hv = self.calculate_hypervolume(pareto_front=pareto_front)
 
         #Obtain initial operator selection from agent
-        state, action= self.call_agent(gen=0, hv=prev_hv, pareto_size=len(pareto_front))
+        state, action= self.call_agent(gen=0, hv=prev_hv, pareto_size=len(pareto_front), pareto_front=pareto_front)
         
         operator_settings = self.agent.retrieve_operator(action = action)
         states_trace.append(state)
@@ -334,6 +339,8 @@ class NSGA_III_Learning:
             else:
                 self.stagnation_counter = 0
 
+            
+
             """ Agent interaction """
             #Obtain next operator selection from agent
             reward, state, action, idx = self.call_agent(gen=gen, 
@@ -341,7 +348,8 @@ class NSGA_III_Learning:
                                                          pareto_size=len(pareto_front), 
                                                          state = state, 
                                                          action = action, 
-                                                         prev_hv=prev_hv)
+                                                         prev_hv=prev_hv,
+                                                         pareto_front = pareto_front)
 
             operator_settings = self.agent.retrieve_operator(action = action)
 
@@ -382,13 +390,18 @@ class NSGA_III_Learning:
                 print('{:>10} | {:>15} | {:>15}'.format(idx, round(self.agent.epsilon,5), str(round(clipped_performance, 4))))
                 end_time = (time.time() - start_time)
                 print(end_time)
-            self.run_reward.append(rewards)
+                print(self.bestperformancedict)
             
-            #self.run_performance.append(sum(rewards))
+           
             self.hv_dict[idx] = self.hv_trace.copy()
-            self.hv_trace = []
-            self.run_epsilon.append(self.agent.epsilon)
             self.policy_dict[idx] = actions 
+            self.hv_trace = []
+
+            #save performance
+            self.run_epsilon.append(self.agent.epsilon)
+            self.run_performance.append(clipped_performance)
+            #self.run_reward.append(rewards)
+
 
             #normalise and clip performance
             
@@ -396,19 +409,49 @@ class NSGA_III_Learning:
             
             #IF STATEMENT TO SAVE BEST MODEL 
             if clipped_performance > self.agent.best_performance:
-                print('best performance', self.agent.best_performance)
                 self.agent.best_performance = clipped_performance
-                self.agent.save_model(fname = f'Bestmodel_23-01-2024_{problem_name}.h5')
+                print('best performance', self.agent.best_performance)
+                self.bestperformancedict[idx] = clipped_performance
+                self.agent.save_model(fname = f'Bestmodel_25-01-2024_test2_{problem_name}.h5')
 
 
             #Save last model
-            self.agent.save_model(fname = f'Lastmodel_23-01-2024_{problem_name}.h5')
+            self.agent.save_model(fname = f'Lastmodel_25-01-2024_test2_{problem_name}.h5')
             # Decay epsilon, to decrease exploration and increase exploitation
             self.agent.epsilon_decay_exponential(idx)
+        return 
         
 
 if __name__ == '__main__':
+    
+    def moving_average(a, n=3) :
+        ret = np.cumsum(a, dtype=float)
+        ret[n:] = ret[n:] - ret[:-n]
+        return ret[n - 1:] / n
+
+    def learningcurveplot(performance, title,):
+        window_size = 50
+        episodes = range(1, len(performance)+1)
+        plt.plot(episodes, performance, label = 'performance')
+
+        moving_average_episodes = range(window_size, len(performance)+1)
+
+        moving_average_performance = moving_average(performance, n =window_size)
+        plt.plot(moving_average_episodes, moving_average_performance, label = 'moving average')
+
+        z = np.polyfit(episodes, performance, 3)
+        p = np.poly1d(z)
+        plt.plot(episodes,p(episodes),"r--", label = 'trendline')
+        plt.title(title)
+        plt.xlabel('Episode')
+        plt.ylabel('Performance')
+        plt.grid(True)
+        plt.legend()
+        plt.show()
+        return
+    
     problem_name = 'dtlz2'
+    nr_of_runs = 2000
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
@@ -420,12 +463,27 @@ if __name__ == '__main__':
                     pop_size=20, 
                     cross_prob=1.0, 
                     mut_prob=1.0, 
-                    MP=8, 
+                    MP=0, 
                     verbose=False,
                     learn_agent=True, 
                     load_agent= None)
     
     start_time = time.time()
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=50, progressbar=False)
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=nr_of_runs, progressbar=False)
 
+
+    
+
+    performance = {'performance': nsga.run_performance,
+                   'epsilon': nsga.run_epsilon,
+                   #'hv_dict': nsga.hv_dict,
+                   #'policy_dict': nsga.policy_dict,
+                   'best_performance': nsga.bestperformancedict} 
+
+    print(performance)
+    file = open(f"Results/NSGA-III_Learning/Lastmodel_25-01-2024_test2_{problem_name}.pkl", "wb")
+    pickle.dump(performance, file)
+    file.close()
+
+    learningcurveplot(nsga.run_performance, f'Learning curve for {problem_name}')
 

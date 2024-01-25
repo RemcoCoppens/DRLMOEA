@@ -27,10 +27,10 @@ class Agent:
             - FCL2_layer: The dimensions of the second fully-connected neural layer
             - replace: The amount of episodes between updates of the behavioral policy network with the weights of the value network.
     """
-    def __init__(self, lr, gamma, actions, batch_size, input_size, 
+    def __init__(self, lr, gamma, actions, batch_size, input_size, replace,
                  epsilon=1.0, eps_dec_lin=1e-4, eps_dec_exp=0.998, 
                  eps_end=1e-2, mem_size=100000, fname='DDQN_test1.h5', 
-                 FCL1_layer=32, FCL2_layer=64, replace=100):
+                 FCL1_layer=32, FCL2_layer=64):
         # Initiate agent characteristics
         self.lr = lr
         self.gamma = gamma
@@ -104,7 +104,8 @@ class Agent:
         else:
             return (val - LB)/(UB - LB)
     
-    def create_state_representation(self, optim, gen, hv, pareto_size):
+
+    def create_state_representation(self, optim, gen, hv, pareto_size, pareto_front):
         """Create the state features and save as a single vector"""
         """Input: 
                 - optim: class object of the optimisation problem
@@ -119,6 +120,8 @@ class Agent:
         norm_avgs = [self.normalize(val = avgs[obj], LB = optim.val_bounds[obj][0], UB = optim.val_bounds[obj][1]) for obj in range(0, optim.NBOJ)]
         norm_mins = [self.normalize(val = mins[obj], LB = optim.val_bounds[obj][0], UB = optim.val_bounds[obj][1]) for obj in range(0, optim.NBOJ)]	
 
+        #spread, uniformity, diversity = self.calculate_spread(pareto_front)
+
         # Create state representation first version
         state_repre = np.array([gen/optim.NGEN,
                                 min(1.0, optim.stagnation_counter/10),
@@ -129,8 +132,16 @@ class Agent:
         
         # Create state representation with all features from previous literature
         # state_repre = np.array([gen/optim.NGEN,
+        #                         min(1.0, optim.stagnation_counter/10),
+        #                         np.mean(norm_avgs),
+        #                         np.mean(norm_mins),
+        #                         hv,
+        #                         pareto_size/optim.POP_SIZE,
+        #                         spread,
+        #                         uniformity,
+        #                         diversity
+        #                         ]).flatten() 
                                 
-        # ]).flatten()
 
         return state_repre
 
@@ -190,9 +201,7 @@ class Agent:
 
         #Create target values
         q_target = np.copy(q_pred)
-        #q_target = rewards + self.gamma * q_next
-
-  
+          
         for idx in range(len(states)):
             #Update target value for the action taken
             q_target[idx, actions[idx]] = rewards[idx] + self.gamma * q_next[idx]
