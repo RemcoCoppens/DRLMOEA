@@ -34,7 +34,7 @@ class NSGA_III_DRL:
             - verbose: If True the performance of every population will be printed
     """
 
-    def __init__(self, problem_name, problem, num_gen, pop_size, cross_prob, mut_prob, MP, verbose = True, learn_agent = True, load_agent = None):
+    def __init__(self, problem_name, problem, num_gen, pop_size, cross_prob, mut_prob, MP, verbose = True, learn_agent = True, load_agent = None, save = True):
         #General
         self.PROBLEM = problem
         self.NBOJ = problem.n_obj
@@ -47,7 +47,9 @@ class NSGA_III_DRL:
         self.MUTPB = mut_prob
         self.MP = MP
         self.verbose = verbose
-        self.directory = self.check_results_directory()
+        self.save = save
+        if self.save:
+            self.directory = self.check_results_directory()
         self.val_bounds = ps.problem_bounds[problem_name]['val']
         self.std_bounds = ps.problem_bounds[problem_name]['std']
         
@@ -59,7 +61,7 @@ class NSGA_III_DRL:
                                       [0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
                                       [0.01, 0.2, 0.4, 0.6, 0.8, 1.0]], 
                            batch_size = 32, #batch size for training the neural network
-                           input_size = 6, #number of features in state representation
+                           input_size = 9, #number of features in state representation
                            replace= self.NGEN *100) #number of steps before updating target network
         self.learn_agent = learn_agent
         self.load_agent = load_agent
@@ -93,13 +95,15 @@ class NSGA_III_DRL:
             return 'NSGA-III_DRL'   
     
     
-    def save_generation(self, gen, population, avg_eval_time, pareto, hv, final_pop=None, alg_exec_time=None):
+    def save_generation(self, gen, population, avg_eval_time, pareto, hv, state, action, final_pop=None, alg_exec_time=None):
         """ Save performance of generation to file """
         # Summarize performance in dictionary object and save to file
         performance_dict = {}
         performance_dict['gen'] = [gen]
         performance_dict['pareto_front'] = [pareto]
         performance_dict['hypervolume'] = hv
+        performance_dict['state'] = [state]
+        performance_dict['action'] = [action]
         performance_dict['avg_eval_time'] = avg_eval_time
         performance_dict['avg_obj'] = [self.logbook[gen]['avg']]
         performance_dict['max_obj'] = [self.logbook[gen]['max']]
@@ -134,8 +138,11 @@ class NSGA_III_DRL:
                                               first_front_only=True)[0]
         
         indivs = [list(np.array(indiv.fitness.values)) for indiv in population]
+         
+        #Sorted Pareto Front
+        sorted_pareto_front = sorted(pareto_front, key=lambda indiv: indiv.fitness.values)
         
-        return [np.array(indiv.fitness.values) for indiv in pareto_front]
+        return [np.array(indiv.fitness.values) for indiv in pareto_front], [np.array(indiv.fitness.values) for indiv in sorted_pareto_front]
     
     def calculate_hypervolume(self, pareto_front) -> float:
         """ Normalize values and calculate the hypervolume indicator of the current pareto front """
@@ -198,14 +205,15 @@ class NSGA_III_DRL:
         #Return a list of varied individuals that are independent of their parents
         return offspring
 
-    def call_agent (self, gen, hv, pareto_size, pareto_front, state = [], action = None, prev_hv = None) -> tuple:
+    def call_agent (self, gen, hv, pareto_size, pareto_front, sorted_pareto_front, state = [], action = None, prev_hv = None) -> tuple:
         """ Call the agent to retrieve the next action """
         if action == None:
             state = self.agent.create_state_representation(optim = self,
                                                            gen = gen,
                                                            hv = hv,
                                                            pareto_size = pareto_size,
-                                                           pareto_front = pareto_front)
+                                                           pareto_front = pareto_front,
+                                                           sorted_pareto_front = sorted_pareto_front)
 
             return state, self.agent.choose_action(state)
             
@@ -214,7 +222,8 @@ class NSGA_III_DRL:
                                                               gen = gen,
                                                               hv = hv,
                                                               pareto_size = pareto_size,
-                                                              pareto_front = pareto_front)
+                                                              pareto_front = pareto_front,
+                                                              sorted_pareto_front = sorted_pareto_front)
 
             idx = self.agent.store_transition(state = state, 
                                               action = action,  
@@ -273,6 +282,7 @@ class NSGA_III_DRL:
 
         #Generate initial population
         pop = toolbox.population(n=self.POP_SIZE)
+      
         #Evaluate the individuals of the initial population with an invalid fitness (measure evaluation time)
         eval_start = time.time()
         invalid_ind = [ind for ind in pop if not ind.fitness.valid]
@@ -288,18 +298,21 @@ class NSGA_III_DRL:
             print(self.logbook.stream)
         
         #Calculate hypervolume of initial population
-        pareto_front = self.retrieve_pareto_front(population=pop)
+        pareto_front, sorted_pareto_front = self.retrieve_pareto_front(population=pop)
         prev_hv = self.calculate_hypervolume(pareto_front=pareto_front)
 
         #Obtain initial operator selection from agent
-        state, action= self.call_agent(gen=0, hv=prev_hv, pareto_size=len(pareto_front), pareto_front = pareto_front)
+        state, action= self.call_agent(gen=0, 
+                                       hv=prev_hv, 
+                                       pareto_size=len(pareto_front), 
+                                       pareto_front = pareto_front, 
+                                       sorted_pareto_front = sorted_pareto_front)
         
         operator_settings = self.agent.retrieve_operator(action = action)
         states_trace.append(state)
         actions_trace.append(operator_settings)
-
         #Save generation to file
-        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv)
+        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv, state = state, action = operator_settings)
         df = pd.DataFrame(save_gen)
 
         """Evolutionary process"""
@@ -329,7 +342,7 @@ class NSGA_III_DRL:
                 print(self.logbook.stream)
 
             #Calculate hypervolume of population
-            pareto_front = self.retrieve_pareto_front(population=pop)
+            pareto_front, sorted_pareto_front = self.retrieve_pareto_front(population=pop)
             cur_hv = self.calculate_hypervolume(pareto_front=pareto_front)
 
             if cur_hv <= prev_hv:
@@ -345,7 +358,9 @@ class NSGA_III_DRL:
                                                          state = state, 
                                                          action = action, 
                                                          prev_hv=prev_hv,
-                                                         pareto_front=pareto_front)
+                                                         pareto_front=pareto_front,
+                                                         sorted_pareto_front = sorted_pareto_front)
+            
 
             operator_settings = self.agent.retrieve_operator(action = action)
 
@@ -358,13 +373,13 @@ class NSGA_III_DRL:
             """"Save results"""
             #Save generation to file
             if gen!= self.NGEN:
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv)
+                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv, state = state, action = operator_settings)
                 df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
             
             #Final generation
             else:
                 algorithm_execution_time = time.time() - Start_timer
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv,
+                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv, state = state, action = operator_settings,
                                              final_pop=1,
                                              alg_exec_time=algorithm_execution_time) 
                 df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
@@ -378,30 +393,30 @@ class NSGA_III_DRL:
     
     def multiple_runs(self, problem_name, nr_of_runes, progressbar = False, shapley = False):
         """ Run the NSGA-III algorithm multiple times """
+        shap_values_list = []
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
+            random.seed(17+idx)
             df, states, actions, reward_idx = self._RUN()
-            self.save_run_to_file(df, idx, problem_name)
+            if self.save:
+                self.save_run_to_file(df, idx, problem_name)
+
             if shapley == True:
                 states = np.array(states)
-                statesnames = ['gen', 'stag_count', 'mean', 'min', 'hv', 'pareto_size']
+                statesnames = ['gen', 'stag_count', 'mean', 'min', 'std' , 'hv', 'pareto_size', 'spacing', 'hole relative size']
                 classnames = self.agent.actions
                 print(classnames)
                 states_tensor = torch.stack([torch.Tensor(i) for i in states])
                 explainer = shap.DeepExplainer(self.agent.q_online_network, states_tensor)
                 shap_values = explainer.shap_values(states_tensor, check_additivity=False)
-                shap.summary_plot(shap_values, states_tensor, feature_names=statesnames)
+                shap_values_list.append(shap_values)
+        if shapley == True:
+            avg_shap_values = np.mean(shap_values_list, axis = 0)
+            avg_shap_values = [avg_shap_values[i] for i in range(avg_shap_values.shape[0])]
+            shap.summary_plot(avg_shap_values, states_tensor, feature_names=statesnames)
                 #plt.savefig(f'Results/{self.directory}/Problem_{problem_name}_Run_{idx}_POP_size_{self.POP_SIZE}_{self.load_agent}_shapley.png')
             
 
 if __name__ == '__main__':
-    def policy_graph():
-        return
-    
-
-    def states_graph():
-        return
-
-
 
     problem_name = 'dtlz2'
     if problem_name.startswith('DF'):
@@ -418,7 +433,8 @@ if __name__ == '__main__':
                     MP=0, 
                     verbose=False,
                     learn_agent=False, 
-                    load_agent= 'Lastmodel_24-01-2024_test2_dtlz2')
+                    load_agent= 'Bestmodel_29-01-2024_dtlz2',
+                    save = False)
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True, shapley = False)
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes= 10, progressbar=True, shapley = True)
 

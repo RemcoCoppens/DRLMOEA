@@ -103,15 +103,37 @@ class Agent:
             return min(max((val - LB)/(UB - LB), 0.0), 1.0)
         else:
             return (val - LB)/(UB - LB)
-    
+        
+    def normalizestd(self, std, LB, UB, clip = True):
+        if clip:
+            return min(max(std/(UB - LB), 0.0), 1.0)
+        else:
+            return std/(UB - LB)
 
-    def create_state_representation(self, optim, gen, hv, pareto_size, pareto_front):
+    def calculate_spacing(self, sorted_pareto_set):
+        distances = [np.linalg.norm(sorted_pareto_set[i+1] - sorted_pareto_set[i]) for i in range(len(sorted_pareto_set)-1)]
+        avg_distance = np.mean(distances)
+        spacing = np.sqrt(np.sum([(avg_distance- distance)**2 for distance in distances]) / (len(sorted_pareto_set) - 1))
+        return spacing
+
+    def calculate_hole_relative_size(self, sorted_pareto_set):
+        distances = [np.linalg.norm(sorted_pareto_set[i+1] - sorted_pareto_set[i]) for i in range(len(sorted_pareto_set)-1)]
+        max_distance = np.max(distances)
+        avg_distance = np.mean(distances)
+        hole_relative_size = max_distance/ avg_distance
+        return hole_relative_size
+        
+
+
+    def create_state_representation(self, optim, gen, hv, pareto_size, pareto_front, sorted_pareto_front):
         """Create the state features and save as a single vector"""
         """Input: 
                 - optim: class object of the optimisation problem
                 - gen: current generation number
                 - hv: hypervolume of the current generation
                 - pareto_size: number of individuals in the pareto front
+                - pareto_front: list of individuals in the pareto front
+                - sorted_pareto_front: list of individuals in the pareto front sorted on the 
                 """
         log = optim.logbook[gen -1]
         avgs, mins, stds = log['avg'], log['min'], log['std']
@@ -119,16 +141,26 @@ class Agent:
         #normalise values
         norm_avgs = [self.normalize(val = avgs[obj], LB = optim.val_bounds[obj][0], UB = optim.val_bounds[obj][1]) for obj in range(0, optim.NBOJ)]
         norm_mins = [self.normalize(val = mins[obj], LB = optim.val_bounds[obj][0], UB = optim.val_bounds[obj][1]) for obj in range(0, optim.NBOJ)]	
+        norm_stds = [self.normalizestd(std = stds[obj], LB = optim.val_bounds[obj][0], UB = optim.val_bounds[obj][1]) for obj in range(0, optim.NBOJ)]	
+        
 
-        #spread, uniformity, diversity = self.calculate_spread(pareto_front)
+
+        #Spacing and hole relative size
+        normalized_sorted_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
+                                                 LB=optim.val_bounds[i][0], 
+                                                 UB=optim.val_bounds[i][1]) for i in range(optim.NBOJ)]) for obj_v in sorted_pareto_front])        
+    
+        spacing = self.calculate_spacing(normalized_sorted_pareto_set)
+        hole_relative_size = self.calculate_hole_relative_size(normalized_sorted_pareto_set)
+
 
         # Create state representation first version
-        state_repre = np.array([gen/optim.NGEN,
-                                min(1.0, optim.stagnation_counter/10),
-                                np.mean(norm_avgs),
-                                np.mean(norm_mins),
-                                hv,
-                                pareto_size/optim.POP_SIZE]).flatten() 
+        # state_repre = np.array([gen/optim.NGEN,
+        #                         min(1.0, optim.stagnation_counter/10),
+        #                         np.mean(norm_avgs),
+        #                         np.mean(norm_mins),
+        #                         hv,
+        #                         pareto_size/optim.POP_SIZE]).flatten() 
         
         # Create state representation with all features from previous literature
         # state_repre = np.array([gen/optim.NGEN,
@@ -136,12 +168,36 @@ class Agent:
         #                         np.mean(norm_avgs),
         #                         np.mean(norm_mins),
         #                         hv,
-        #                         pareto_size/optim.POP_SIZE,
-        #                         spread,
-        #                         uniformity,
-        #                         diversity
-        #                         ]).flatten() 
+        #                         pareto_size/optim.POP_SIZE, #cardinality: simple the number of points in pareto front
+        #                         spacing,
+        #                         hole_relative_size]).flatten() 
+        
+        # Create state representation with all features from previous literature INCLUDING STD
+        state_repre = np.array([gen/optim.NGEN,
+                                min(1.0, optim.stagnation_counter/10),
+                                np.mean(norm_avgs),
+                                np.mean(norm_mins),
+                                np.mean(norm_stds),
+                                hv,
+                                pareto_size/optim.POP_SIZE, #cardinality: simple the number of points in pareto front
+                                spacing,
+                                hole_relative_size]).flatten() 
+
+        #Replace hypervolume for new state features 
+        # state_repre = np.array([gen/optim.NGEN,
+        #                         min(1.0, optim.stagnation_counter/10),
+        #                         np.mean(norm_avgs),
+        #                         np.mean(norm_mins),
+        #                         np.mean(norm_stds),
                                 
+
+        #                         pareto_size/optim.POP_SIZE, #cardinality: simple the number of points in pareto front
+        #                         spacing,
+        #                         hole_relative_size]).flatten() 
+
+
+
+
 
         return state_repre
 

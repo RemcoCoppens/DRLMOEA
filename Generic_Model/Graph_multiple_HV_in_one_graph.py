@@ -37,7 +37,7 @@ def get_hypervolume_values(problem_name, run, directory, gens, load_model = None
 
 def plot_hypervolume(problem_name, run, directory, gens, model1 = None, model2 = None, model3 = None, model4 = None, model5 = None, model6 = None, model7 = None, model8 = None, model9 = None, model10 = None):
     
-    main_nsga = get_hypervolume_values(problem_name, run, 'NSGA-III_dtlz_2_36variables_bounds2.5-2.5-3.5' , gens)
+    main_nsga = get_hypervolume_values(problem_name, run, 'NSGA-III_NSGA-III_dtlz2_36variables_withseed' , gens)
     min, max, avg, std = main_nsga
     plt.errorbar(np.arange(len(avg)), avg, yerr=std, fmt='-', color='red', ecolor='lightcoral', elinewidth=5, capthick=1, label='NSGA-III')
 

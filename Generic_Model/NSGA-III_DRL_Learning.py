@@ -55,7 +55,7 @@ class NSGA_III_Learning:
                                       [0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
                                       [0.01, 0.2, 0.4, 0.6, 0.8, 1.0]],
                            batch_size = 32,
-                           input_size = 6,
+                           input_size = 9,
                            replace = self.NGEN*100)
                            
         self.learn_agent = learn_agent
@@ -133,8 +133,11 @@ class NSGA_III_Learning:
                                               first_front_only=True)[0]
         
         indivs = [list(np.array(indiv.fitness.values)) for indiv in population]
+
+        sorted_pareto_front = sorted(pareto_front, key=lambda indiv: indiv.fitness.values)
         
-        return [np.array(indiv.fitness.values) for indiv in pareto_front]
+        return [np.array(indiv.fitness.values) for indiv in pareto_front], [np.array(indiv.fitness.values) for indiv in sorted_pareto_front]
+    
     
     def calculate_hypervolume(self, pareto_front) -> float:
         """ Normalize values and calculate the hypervolume indicator of the current pareto front """
@@ -197,14 +200,16 @@ class NSGA_III_Learning:
         #Return a list of varied individuals that are independent of their parents
         return offspring
 
-    def call_agent (self, gen, hv, pareto_size, pareto_front, state = [], action = None, prev_hv = None) -> tuple:
+    def call_agent (self, gen, hv, pareto_size, pareto_front, sorted_pareto_front, state = [], action = None, prev_hv = None) -> tuple:
         """ Call the agent to retrieve the next action """
         if action == None:
             state = self.agent.create_state_representation(optim = self,
                                                            gen = gen,
                                                            hv = hv,
                                                            pareto_size = pareto_size, 
-                                                           pareto_front = pareto_front )
+                                                           pareto_front = pareto_front,
+                                                           sorted_pareto_front = sorted_pareto_front
+                                                             )
 
             return state, self.agent.choose_action(state)
             
@@ -213,7 +218,8 @@ class NSGA_III_Learning:
                                                               gen = gen,
                                                               hv = hv,
                                                               pareto_size = pareto_size,
-                                                              pareto_front = pareto_front)
+                                                              pareto_front = pareto_front,
+                                                              sorted_pareto_front = sorted_pareto_front)
             
             reward = hv 
 
@@ -290,11 +296,15 @@ class NSGA_III_Learning:
             print(self.logbook.stream)
         
         #Calculate hypervolume of initial population
-        pareto_front = self.retrieve_pareto_front(population=pop)
+        pareto_front, sorted_pareto_front = self.retrieve_pareto_front(population=pop)
         prev_hv = self.calculate_hypervolume(pareto_front=pareto_front)
 
         #Obtain initial operator selection from agent
-        state, action= self.call_agent(gen=0, hv=prev_hv, pareto_size=len(pareto_front), pareto_front=pareto_front)
+        state, action= self.call_agent(gen=0, 
+                                       hv=prev_hv, 
+                                       pareto_size=len(pareto_front), 
+                                       pareto_front=pareto_front, 
+                                       sorted_pareto_front=sorted_pareto_front)
         
         operator_settings = self.agent.retrieve_operator(action = action)
         states_trace.append(state)
@@ -331,7 +341,7 @@ class NSGA_III_Learning:
                 print(self.logbook.stream)
 
             #Calculate hypervolume of population
-            pareto_front = self.retrieve_pareto_front(population=pop)
+            pareto_front, sorted_pareto_front = self.retrieve_pareto_front(population=pop)
             cur_hv = self.calculate_hypervolume(pareto_front=pareto_front)
 
             if cur_hv <= prev_hv:
@@ -349,10 +359,10 @@ class NSGA_III_Learning:
                                                          state = state, 
                                                          action = action, 
                                                          prev_hv=prev_hv,
-                                                         pareto_front = pareto_front)
+                                                         pareto_front = pareto_front,
+                                                         sorted_pareto_front=sorted_pareto_front)
 
             operator_settings = self.agent.retrieve_operator(action = action)
-
             states_trace.append(state)
             actions_trace.append(operator_settings)
             reward_trace.append(reward)
@@ -412,11 +422,11 @@ class NSGA_III_Learning:
                 self.agent.best_performance = clipped_performance
                 print('best performance', self.agent.best_performance)
                 self.bestperformancedict[idx] = clipped_performance
-                self.agent.save_model(fname = f'Bestmodel_25-01-2024_test2_{problem_name}.h5')
+                self.agent.save_model(fname = f'Bestmodel_29-01-2024_test2_{problem_name}.h5')
 
 
             #Save last model
-            self.agent.save_model(fname = f'Lastmodel_25-01-2024_test2_{problem_name}.h5')
+            self.agent.save_model(fname = f'Lastmodel_29-01-2024_test2_{problem_name}.h5')
             # Decay epsilon, to decrease exploration and increase exploitation
             self.agent.epsilon_decay_exponential(idx)
         return 
@@ -481,7 +491,7 @@ if __name__ == '__main__':
                    'best_performance': nsga.bestperformancedict} 
 
     print(performance)
-    file = open(f"Results/NSGA-III_Learning/Lastmodel_25-01-2024_test2_{problem_name}.pkl", "wb")
+    file = open(f"Results/NSGA-III_Learning/Lastmodel_29-01-2024_test2_{problem_name}.pkl", "wb")
     pickle.dump(performance, file)
     file.close()
 

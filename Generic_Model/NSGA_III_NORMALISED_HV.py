@@ -35,7 +35,7 @@ class NSGA_III:
             - verbose: If True the performance of every population will be printed
     """
 
-    def __init__(self, problem_name, problem, num_gen, pop_size, cross_prob, mut_prob, MP, verbose = True, save = True):
+    def __init__(self, problem_name, problem, num_gen, pop_size, cross_prob, mut_prob, MP, verbose = True):
         self.PROBLEM = problem
         self.NBOJ = problem.n_obj
         self.NDIM = problem.n_var
@@ -47,26 +47,25 @@ class NSGA_III:
         self.MUTPB = mut_prob
         self.MP = MP
         self.verbose = verbose
-        self.save = save
-        if self.save: 
-            self.directory = self.check_results_directory()
+        #self.directory = self.check_results_directory()
         self.val_bounds = ps.problem_bounds[problem_name]['val']
-        self.std_bounds = ps.problem_bounds[problem_name]['std']
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
+        self.hv_bounds = [1.0, 0.0]
+        
 
 
     def check_results_directory(self):
         """ Check if there are already results in the NSGA-III file, if so ask for overwrite and if requested create new file """
-        if len(os.listdir("Results/NSGA-III")) > 0:
+        if len(os.listdir("Results/NSGA-III_HV")) > 0:
             selection = input("Existing files found, do you want to overwrite? [y/n]")
             if selection == 'y' or selection == 'yes' or selection == 'Y' or selection == 'YES':
-                return 'NSGA-III'
+                return 'NSGA-III_HV'
             elif selection == 'n' or selection == 'no' or selection == 'N' or selection == 'NO':
                 folder_extension = input("Insert Folder Extension")
-                os.mkdir(path=f'Results/NSGA-III_{folder_extension}') 
+                os.mkdir(path=f'Results/NSGA-III_HV_{folder_extension}') 
                 return f'NSGA-III_{folder_extension}'
         else:
-            return 'NSGA-III'
+            return 'NSGA-III_HV'
         
     def save_generation(self, gen, population, avg_eval_time, gen_time, pareto, hv, final_pop=None, alg_exec_time=None):
         """ Save performance of generation to file """
@@ -85,8 +84,6 @@ class NSGA_III:
         performance_dict['algorithm_execution_time'] = None
         if final_pop != None and alg_exec_time != None:
             performance_dict['algorithm_execution_time'] = alg_exec_time
-
-
         return performance_dict
     
     def save_run_to_file(self, performance, run, problem_name):
@@ -122,8 +119,22 @@ class NSGA_III:
         #self.hv_tracking.append(hv)
         return hv
 
+    def binary_hv(self, hv_list):
+        if hv_list[-1] >= hv_list[-2]:
+            binary_hv = 1
+        else:
+            binary_hv = 0
+        
+        return binary_hv
 
-    def _RUN(self): 
+    def firstderivative_hv(self, hv_list, firstder_hv_list):
+        
+        return
+    
+    def secondderivative_hv(self, hv_list):
+        return
+
+    def _RUN(self, warmup=False): 
         """Run the NSGA-III loop until the termination criterion is met"""
         """Initialization"""
         # Initialize creator class
@@ -134,6 +145,10 @@ class NSGA_III:
         print(f'---start NSGA-III Run for {self.NGEN} generations and a population of size {self.POP_SIZE} distributing work over {self.MP} cores ---')
         #Start time
         Start_timer = time.time()
+        norm_hv_list = []
+        hv_list = []
+        firstder_hv_list = []
+        secondder_hv_list = []
 
         #Set up the toolbox for individuals and population
         toolbox = base.Toolbox()
@@ -166,7 +181,6 @@ class NSGA_III:
 
         #Generate initial population
         pop = toolbox.population(n=self.POP_SIZE)
-        print(pop)
         #Evaluate the individuals of the initial population with an invalid fitness (measure evaluation time)
         eval_start = time.time()
         invalid_ind = [ind for ind in pop if not ind.fitness.valid]
@@ -177,18 +191,29 @@ class NSGA_III:
         avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
         
         #Compile statistics about the population
-        record = stats.compile(pop)
-        self.logbook.record(gen=0, evals=len(invalid_ind), **record)
-        if self.verbose:
-            print(self.logbook.stream)
+        if warmup == False:
+            record = stats.compile(pop)
+            self.logbook.record(gen=0, evals=len(invalid_ind), **record)
+            if self.verbose:
+                print(self.logbook.stream)
         
         #Calculate hypervolume of initial population
         pareto_front = self.retrieve_pareto_front(population=pop)
         hv = self.calculate_hypervolume(pareto_front=pareto_front)
-
+        hv_list.append(hv)
+        binary_hv = 1
+        firstder_hv = self.firstderivative_hv(hv_list, firstder_hv_list)
+        firstder_hv_list.append(firstder_hv)
+        
+        if warmup == False:
+            norm_hv = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
+            norm_hv_list.append(norm_hv)
+            
+        
         #Save generation to file
-        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, gen_time=0, pareto = pareto_front, hv = hv)
-        df = pd.DataFrame(save_gen)
+        if warmup == False:
+            save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, gen_time=0, pareto = pareto_front, hv = hv)
+            df = pd.DataFrame(save_gen)
 
         """Evolutionary process"""
         #Start the evolutionary process (measure total procesing time of evolution)
@@ -197,7 +222,6 @@ class NSGA_III:
 
             #Create offspring
             offspring = algorithms.varAnd(pop, toolbox, self.CXPB, self.MUTPB)
-        
 
             #Evaluate the individuals of the offspring with an invalid fitness (measure evaluation time)
             eval_start = time.time()
@@ -211,53 +235,89 @@ class NSGA_III:
             pop = toolbox.select(pop + offspring, self.POP_SIZE)
             
             #Compile statistics about the new population
-            record = stats.compile(pop)
-            self.logbook.record(gen=gen, evals=len(invalid_ind), **record)
-            if self.verbose:
-                print(self.logbook.stream)
+            if warmup == False:
+                record = stats.compile(pop)
+                self.logbook.record(gen=gen, evals=len(invalid_ind), **record)
+                if self.verbose:
+                    print(self.logbook.stream)
 
             gen_time = time.time() - gen_start
 
             #Calculate hypervolume of population
             pareto_front = self.retrieve_pareto_front(population=pop)
             hv = self.calculate_hypervolume(pareto_front=pareto_front)
+            hv_list.append(hv)
+            
+            binary_hv = self.binary_hv(hv_list)
+            firstder_hv = self.firstderivative_hv(hv_list, firstder_hv_list)
+            firstder_hv_list.append(firstder_hv)    
+            
+            if warmup == False:
+                norm_hv = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
+                norm_hv_list.append(norm_hv)
+            
+
+
 
             """"Save results"""
             #Save generation to file
-            if gen!= self.NGEN:
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv)
-                df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-            
-            #Final generation
-            else:
-                algorithm_execution_time = time.time() - Start_timer
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv,
-                                             final_pop=1,
-                                             alg_exec_time=algorithm_execution_time) 
-                df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-                display(df)
+            if warmup ==False:
+                if gen!= self.NGEN:
+                    save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv)
+                    df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
+                
+                #Final generation
+                else:
+                    algorithm_execution_time = time.time() - Start_timer
+                    save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, gen_time=gen_time, pareto = pareto_front, hv = hv,
+                                                final_pop=1,
+                                                alg_exec_time=algorithm_execution_time) 
+                    df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
+                    display(df)
         # Close the multiprocessing pool if used
         if self.MP > 0:
             pool.close()
             pool.join()
-        return df
+        
+        if warmup:
+            return norm_hv_list, hv_list
+        else:
+            return df, norm_hv_list, hv_list, firstder_hv_list
+
 
     def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
         """ Run the NSGA-III algorithm multiple times """
+        for i in range(10):
+            _, hv_list = self._RUN(warmup=True)
+            self.hv_bounds[0] = min(self.hv_bounds[0], min(hv_list))
+            self.hv_bounds[1] = max(self.hv_bounds[1], max(hv_list))
+
+            print(self.hv_bounds)
+
+
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
-            random.seed(17+idx)
-            performance = self._RUN()
-            if self.save:
-                self.save_run_to_file(performance, idx, problem_name)
+            performance, norm_hv_list, hv_list, firstder_hv_list = self._RUN()
+            #self.save_run_to_file(performance, idx, problem_name)
+            
+            
+
+            plt.plot(hv_list, label = 'hv')
+            plt.plot(norm_hv_list, label = 'norm hv')
+            plt.plot(firstder_hv_list, label = 'firstder hv')
+
+            plt.legend()
+            plt.show()
+
+
 
 if __name__ == '__main__':
-    problem_name = 'dtlz2'
+    problem_name = 'DF10'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
         problem = ps.problems_DEAP[problem_name]
 
-    generations = [100]
+    generations = [10]
     for i in generations:
         nsga = NSGA_III(problem_name = problem_name, 
                         problem = problem, 
@@ -266,9 +326,8 @@ if __name__ == '__main__':
                         cross_prob=1.0, 
                         mut_prob=1.0, 
                         MP=0, 
-                        verbose=False,
-                        save = True)
+                        verbose=False)
     
-        nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
+        nsga.multiple_runs(problem_name = problem_name, nr_of_runes=1, progressbar=True)
 
 
