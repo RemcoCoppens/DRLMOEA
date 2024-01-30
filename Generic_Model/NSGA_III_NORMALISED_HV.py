@@ -52,6 +52,7 @@ class NSGA_III:
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
         self.hv_bounds = [1.0, 0.0]
         
+        
 
 
     def check_results_directory(self):
@@ -127,12 +128,21 @@ class NSGA_III:
         
         return binary_hv
 
-    def firstderivative_hv(self, hv_list, firstder_hv_list):
-        
-        return
+    def firstderivative_hv(self, hv_list):
+        if len(hv_list) <2:
+            return 0
+        else:
+            #return ((hv_list[-1] - hv_list[-2])/ hv_list[-2]) #RELATIVE CHANGE IN Y WITH RESPECT TO PREVIOUS VALUE
+            return (hv_list[-1] - hv_list[-2]) #FIRST DERIVATIVE
     
-    def secondderivative_hv(self, hv_list):
-        return
+    def secondderivative_hv(self, firstder_hv_list):
+        
+        if len(firstder_hv_list) <3:
+            return 0
+        else:
+            #return ((firstder_hv_list[-1] - firstder_hv_list[-2])/ firstder_hv_list[-2])
+            return (firstder_hv_list[-1] - firstder_hv_list[-2])
+
 
     def _RUN(self, warmup=False): 
         """Run the NSGA-III loop until the termination criterion is met"""
@@ -202,9 +212,16 @@ class NSGA_III:
         hv = self.calculate_hypervolume(pareto_front=pareto_front)
         hv_list.append(hv)
         binary_hv = 1
-        firstder_hv = self.firstderivative_hv(hv_list, firstder_hv_list)
-        firstder_hv_list.append(firstder_hv)
-        
+        firstder_hv = self.firstderivative_hv(hv_list)
+        firstder_hv_list.append(firstder_hv)    
+        secondder_hv = self.secondderivative_hv(firstder_hv_list)
+        secondder_hv_list.append(secondder_hv)
+        print('hv', hv)
+        print('hv_list', hv_list)
+        print('firstder_hv', firstder_hv)
+        print('firstder_hv_list', firstder_hv_list)
+        print('secondder_hv', secondder_hv)
+    
         if warmup == False:
             norm_hv = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
             norm_hv_list.append(norm_hv)
@@ -249,8 +266,15 @@ class NSGA_III:
             hv_list.append(hv)
             
             binary_hv = self.binary_hv(hv_list)
-            firstder_hv = self.firstderivative_hv(hv_list, firstder_hv_list)
+            firstder_hv = self.firstderivative_hv(hv_list)
             firstder_hv_list.append(firstder_hv)    
+            secondder_hv = self.secondderivative_hv(firstder_hv_list)
+            secondder_hv_list.append(secondder_hv)
+            print('hv', hv)
+            print('hv_list', hv_list)
+            print('firstder_hv', firstder_hv)
+            print('firstder_hv_list', firstder_hv_list)
+            print('secondder_hv', secondder_hv)
             
             if warmup == False:
                 norm_hv = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
@@ -282,7 +306,7 @@ class NSGA_III:
         if warmup:
             return norm_hv_list, hv_list
         else:
-            return df, norm_hv_list, hv_list, firstder_hv_list
+            return df, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list
 
 
     def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
@@ -296,7 +320,7 @@ class NSGA_III:
 
 
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
-            performance, norm_hv_list, hv_list, firstder_hv_list = self._RUN()
+            performance, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list = self._RUN()
             #self.save_run_to_file(performance, idx, problem_name)
             
             
@@ -304,6 +328,7 @@ class NSGA_III:
             plt.plot(hv_list, label = 'hv')
             plt.plot(norm_hv_list, label = 'norm hv')
             plt.plot(firstder_hv_list, label = 'firstder hv')
+            plt.plot(secondder_hv_list, label = 'secondder hv')
 
             plt.legend()
             plt.show()
@@ -311,7 +336,7 @@ class NSGA_III:
 
 
 if __name__ == '__main__':
-    problem_name = 'DF10'
+    problem_name = 'dtlz2'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
