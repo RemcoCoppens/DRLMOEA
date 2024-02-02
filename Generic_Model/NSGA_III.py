@@ -91,9 +91,19 @@ class NSGA_III:
     
     def save_run_to_file(self, performance, run, problem_name):
         """ Save performance of run to file """
-        file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_Run_{run}_Gens_{self.NGEN}_POP_size_{self.POP_SIZE}'}.pkl", "wb")
-        pickle.dump(performance, file)
-        file.close()
+        if run == 1:
+            # Create new file
+            file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_POP_size_{self.POP_SIZE}'}.pkl", "wb")
+            pickle.dump(performance, file)
+            file.close()
+        else:
+            with open(f"Results/{f'{self.directory}/Problem_{problem_name}_POP_size_{self.POP_SIZE}'}.pkl", "ab") as input_file:
+                pickle.dump(performance, input_file)
+            input_file.close()
+        
+        # file = open(f"Results/{f'{self.directory}/Problem_{problem_name}_Run_{run}_Gens_{self.NGEN}_POP_size_{self.POP_SIZE}'}.pkl", "wb")
+        # pickle.dump(performance, file)
+        # file.close()
 
     def normalize(self, val, LB, UB, clip=True):
         """ Apply (bounded) normalization on the given value using the given bounds (LB, UB) """
@@ -166,7 +176,7 @@ class NSGA_III:
 
         #Generate initial population
         pop = toolbox.population(n=self.POP_SIZE)
-        print(pop)
+        
         #Evaluate the individuals of the initial population with an invalid fitness (measure evaluation time)
         eval_start = time.time()
         invalid_ind = [ind for ind in pop if not ind.fitness.valid]
@@ -251,7 +261,7 @@ class NSGA_III:
                 self.save_run_to_file(performance, idx, problem_name)
 
 if __name__ == '__main__':
-    problem_name = 'dtlz2'
+    problem_name = 'Large_dtlz2'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:

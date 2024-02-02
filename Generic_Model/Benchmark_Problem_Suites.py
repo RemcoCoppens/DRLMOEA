@@ -14,6 +14,8 @@ problem_names_DEAP = ['dtlz1', 'dtlz2', 'dtlz3', 'dtlz4', 'dtlz5', 'dtlz6',
 
 problems_DEAP = {'dtlz1': get_problem('dtlz1', n_var=7, n_obj=3),
              'dtlz2': get_problem('dtlz2', n_var=36, n_obj=3),
+             'Small_dtlz2': get_problem('dtlz2', n_var=12, n_obj=3),
+             'Large_dtlz2': get_problem('dtlz2', n_var=96, n_obj=3),
             'dtlz3': get_problem('dtlz3', n_var=12, n_obj=3),
             'dtlz4': get_problem('dtlz4', n_var=12, n_obj=3),
             'dtlz5': get_problem('dtlz5', n_var=12, n_obj=3),
@@ -81,6 +83,8 @@ def get_bounds(problem:str) -> dict:
 
 problem_bounds = {'dtlz1': {'val': [(0.0, 125), (0, 125.0), (0.0, 225.0)], 'mean': [67.8, 68.7, 135.7], 'std': [65.4, 64.3, 90.8]},
             'dtlz2': {'val': [(0.0, 2.50), (0.0, 2.50), (0.0, 3.50)], 'mean': [1.55, 1.55, 2.44], 'std': [0.55, 0.55, 0.59]}, 
+            'Small_dtlz2': {'val': [(0.0, 1.25), (0.0, 1.25), (0.0, 1.75)], 'mean': [0.74, 0.74, 1.16], 'std': [0.55, 0.55, 0.59]},
+            'Large_dtlz2': {'val': [(0.0, 5.00), (0.0, 5.00), (0.0, 8.00)], 'mean': [3.57, 3.58, 5.63], 'std': [2.61, 2.61, 2.76]},            
             'dtlz3': {'val': [(0.0, 750.0), (0.0, 750.0), (0.0, 1000.0)], 'mean': [440.3, 441.1, 690.2], 'std': [343.5, 339.5, 371.0]},
             'dtlz4': {'val': [(1.0, 2.5), (0.0, 0.2), (0.0, 0.2)], 'mean': [1.8, 0.03, 0.03], 'std': [0.28, 0.18, 0.17]},
             'dtlz5': {'val': [(0.0, 1.2), (0.0, 1.2), (0.0, 1.5)], 'mean': [0.81, 0.81, 1.17], 'std': [0.45, 0.45, 0.59]},

@@ -125,7 +125,7 @@ class Agent:
         
 
 
-    def create_state_representation(self, optim, gen, hv, pareto_size, pareto_front, sorted_pareto_front):
+    def create_state_representation(self, optim, gen, hv, pareto_size, pareto_front, sorted_pareto_front, norm_hv, binary_hv, firstder_hv, secondder_hv):
         """Create the state features and save as a single vector"""
         """Input: 
                 - optim: class object of the optimisation problem
@@ -173,29 +173,40 @@ class Agent:
         #                         hole_relative_size]).flatten() 
         
         # Create state representation with all features from previous literature INCLUDING STD
-        state_repre = np.array([gen/optim.NGEN,
-                                min(1.0, optim.stagnation_counter/10),
-                                np.mean(norm_avgs),
-                                np.mean(norm_mins),
-                                np.mean(norm_stds),
-                                hv,
-                                pareto_size/optim.POP_SIZE, #cardinality: simple the number of points in pareto front
-                                spacing,
-                                hole_relative_size]).flatten() 
-
-        #Replace hypervolume for new state features 
         # state_repre = np.array([gen/optim.NGEN,
         #                         min(1.0, optim.stagnation_counter/10),
         #                         np.mean(norm_avgs),
         #                         np.mean(norm_mins),
         #                         np.mean(norm_stds),
-                                
-
+        #                         hv,
         #                         pareto_size/optim.POP_SIZE, #cardinality: simple the number of points in pareto front
         #                         spacing,
         #                         hole_relative_size]).flatten() 
 
+        #REPLACE HV WITH NEW STATE FEATURES
+        #normalised HV #9
+        state_repre = np.array([gen/optim.NGEN,
+                                min(1.0, optim.stagnation_counter/10),
+                                np.mean(norm_avgs),
+                                np.mean(norm_mins),
+                                np.mean(norm_stds),
+                                norm_hv,
+                                pareto_size/optim.POP_SIZE, #cardinality: simple the number of points in pareto front
+                                spacing,
+                                hole_relative_size]).flatten() 
 
+        #Binary HV and change in HV #11
+        # state_repre = np.array([gen/optim.NGEN,
+        #                         min(1.0, optim.stagnation_counter/10),
+        #                         np.mean(norm_avgs),
+        #                         np.mean(norm_mins),
+        #                         np.mean(norm_stds),
+        #                         binary_hv,
+        #                         firstder_hv,
+        #                         secondder_hv,
+        #                         pareto_size/optim.POP_SIZE, #cardinality: simple the number of points in pareto front
+        #                         spacing,
+        #                         hole_relative_size]).flatten() 
 
 
 

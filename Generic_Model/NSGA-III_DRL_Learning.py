@@ -55,7 +55,7 @@ class NSGA_III_Learning:
                                       [0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
                                       [0.01, 0.2, 0.4, 0.6, 0.8, 1.0]],
                            batch_size = 32,
-                           input_size = 9,
+                           input_size = 11,
                            replace = self.NGEN*100)
                            
         self.learn_agent = learn_agent
@@ -65,6 +65,7 @@ class NSGA_III_Learning:
 
         self.stagnation_counter = 0
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
+        self.hv_bounds = [1.0, 0.0]
         self.hv_trace = []
 
         self.hv_dict = {}
@@ -150,7 +151,30 @@ class NSGA_III_Learning:
         self.hv_trace.append(hv)
         return hv
 
-    def create_offspring(self, population, operator, use_agent = True) -> list:
+    def binary_hv(self, hv_list):
+        if hv_list[-1] >= hv_list[-2]:
+            binary_hv = 1
+        else:
+            binary_hv = 0
+        
+        return binary_hv
+
+    def firstderivative_hv(self, hv_list):
+        if len(hv_list) <2:
+            return 0
+        else:
+            #return ((hv_list[-1] - hv_list[-2])/ hv_list[-2]) #RELATIVE CHANGE IN Y WITH RESPECT TO PREVIOUS VALUE
+            return (hv_list[-1] - hv_list[-2]) #FIRST DERIVATIVE
+    
+    def secondderivative_hv(self, firstder_hv_list):
+        
+        if len(firstder_hv_list) <3:
+            return 0
+        else:
+            #return ((firstder_hv_list[-1] - firstder_hv_list[-2])/ firstder_hv_list[-2])
+            return (firstder_hv_list[-1] - firstder_hv_list[-2])
+
+    def create_offspring(self, population, operator, use_agent = True, warmup = False) -> list:
         """Create offspring from the current population (retrieved from DEAP varAnd module)"""
         #Clone parental population to create offspring population
         offspring = [deepcopy(indiv) for indiv in population]
@@ -161,7 +185,7 @@ class NSGA_III_Learning:
         #COMMENT: STRUCTUUR HANGT AF VAN WAT WE DE AGENT WILLEN LATEN DOEN
         
         for i in range(1, len(offspring), 2):
-            if use_agent:
+            if use_agent and warmup == False:
                 if random.random() < self.CXPB:
                     offspring[i-1], offspring[i] = tools.cxSimulatedBinaryBounded(ind1= offspring[i-1],
                                                                                   ind2= offspring[i],
@@ -180,7 +204,7 @@ class NSGA_III_Learning:
 
         #Apply mutation for every individual
         for i in range(len(offspring)):
-            if use_agent: 
+            if use_agent and warmup == False: 
                 if random.random() < self.MUTPB:
                     offspring[i], = tools.mutPolynomialBounded(individual=offspring[i],
                                                                 eta=operator[1],
@@ -200,7 +224,7 @@ class NSGA_III_Learning:
         #Return a list of varied individuals that are independent of their parents
         return offspring
 
-    def call_agent (self, gen, hv, pareto_size, pareto_front, sorted_pareto_front, state = [], action = None, prev_hv = None) -> tuple:
+    def call_agent (self, gen, hv, pareto_size, pareto_front, sorted_pareto_front, norm_hv, binary_hv, firstder_hv, secondder_hv, warmup, state = [], action = None, prev_hv = None) -> tuple:
         """ Call the agent to retrieve the next action """
         if action == None:
             state = self.agent.create_state_representation(optim = self,
@@ -208,7 +232,11 @@ class NSGA_III_Learning:
                                                            hv = hv,
                                                            pareto_size = pareto_size, 
                                                            pareto_front = pareto_front,
-                                                           sorted_pareto_front = sorted_pareto_front
+                                                           sorted_pareto_front = sorted_pareto_front,
+                                                            norm_hv = norm_hv,
+                                                            binary_hv = binary_hv,
+                                                            firstder_hv = firstder_hv,
+                                                            secondder_hv = secondder_hv
                                                              )
 
             return state, self.agent.choose_action(state)
@@ -219,10 +247,17 @@ class NSGA_III_Learning:
                                                               hv = hv,
                                                               pareto_size = pareto_size,
                                                               pareto_front = pareto_front,
-                                                              sorted_pareto_front = sorted_pareto_front)
+                                                              sorted_pareto_front = sorted_pareto_front,
+                                                              norm_hv = norm_hv,
+                                                              binary_hv = binary_hv,
+                                                              firstder_hv = firstder_hv,
+                                                              secondder_hv = secondder_hv)
             
             reward = hv 
-
+        
+        if warmup == True:
+            idx = None
+        else: 
             idx = self.agent.store_transition(state = state, 
                                               action = action,  
                                               state_ = state_)
@@ -230,11 +265,11 @@ class NSGA_III_Learning:
             if self.learn_agent:
                 self.agent.learn()
 
-            state = state_
+        state = state_
 
         return reward, state, self.agent.choose_action(state), idx
 
-    def _RUN(self, use_agent = True):
+    def _RUN(self, use_agent = True, warmup = False):
         """Run the NSGA-III loop until the termination criterion is met"""
         """Initialization"""
         # Initialize creator class
@@ -245,6 +280,10 @@ class NSGA_III_Learning:
         #print(f'---start NSGA-III Run for {self.NGEN} generations and a population of size {self.POP_SIZE} distributing work over {self.MP} cores ---')
         #Start time
         Start_timer = time.time()
+
+        #Initialize hypervolume lists
+        hv_list = []
+        firstder_hv_list = []
 
         #Initialize trace lists of the agents interactions
         states_trace = []
@@ -298,22 +337,30 @@ class NSGA_III_Learning:
         #Calculate hypervolume of initial population
         pareto_front, sorted_pareto_front = self.retrieve_pareto_front(population=pop)
         prev_hv = self.calculate_hypervolume(pareto_front=pareto_front)
+        hv_list.append(prev_hv)
+        binary_hv = 1
+        firstder_hv = self.firstderivative_hv(hv_list)
+        firstder_hv_list.append(firstder_hv)    
+        secondder_hv = self.secondderivative_hv(firstder_hv_list)
+        norm_hv = self.normalize(prev_hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
+
 
         #Obtain initial operator selection from agent
         state, action= self.call_agent(gen=0, 
-                                       hv=prev_hv, 
-                                       pareto_size=len(pareto_front), 
-                                       pareto_front=pareto_front, 
-                                       sorted_pareto_front=sorted_pareto_front)
+                                    hv=prev_hv, 
+                                    pareto_size=len(pareto_front), 
+                                    pareto_front=pareto_front, 
+                                    sorted_pareto_front=sorted_pareto_front, 
+                                    norm_hv = norm_hv,
+                                    binary_hv = binary_hv, 
+                                    firstder_hv = firstder_hv, 
+                                    secondder_hv = secondder_hv,
+                                    warmup = warmup)
         
         operator_settings = self.agent.retrieve_operator(action = action)
         states_trace.append(state)
         actions_trace.append(operator_settings)
 
-        #Save generation to file
-        #COMMENT: KIJKEN OF WE TIJDENS TRAINEN DIT OOK NOG WILLEN OPSLAAN, WORDT BEETJE TEVEEL VAN HET GOEDE DENK IK
-        #save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, gen_time=0, pareto = pareto_front, hv = hv)
-        #df = pd.DataFrame(save_gen)
 
         """Evolutionary process"""
         #Start the evolutionary process (measure total procesing time of evolution)
@@ -321,7 +368,7 @@ class NSGA_III_Learning:
             gen_start = time.time()
             
             #Create offspring
-            offspring = self.create_offspring(population=pop, operator=operator_settings, use_agent = use_agent)
+            offspring = self.create_offspring(population=pop, operator=operator_settings, use_agent = use_agent, warmup = warmup)
 
             #Evaluate the individuals of the offspring with an invalid fitness (measure evaluation time)
             #eval_start = time.time()
@@ -343,6 +390,12 @@ class NSGA_III_Learning:
             #Calculate hypervolume of population
             pareto_front, sorted_pareto_front = self.retrieve_pareto_front(population=pop)
             cur_hv = self.calculate_hypervolume(pareto_front=pareto_front)
+            hv_list.append(cur_hv)
+            binary_hv = 1
+            firstder_hv = self.firstderivative_hv(hv_list)
+            firstder_hv_list.append(firstder_hv)    
+            secondder_hv = self.secondderivative_hv(firstder_hv_list)
+            norm_hv = self.normalize(cur_hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
 
             if cur_hv <= prev_hv:
                 self.stagnation_counter += 1
@@ -354,13 +407,18 @@ class NSGA_III_Learning:
             """ Agent interaction """
             #Obtain next operator selection from agent
             reward, state, action, idx = self.call_agent(gen=gen, 
-                                                         hv=cur_hv, 
-                                                         pareto_size=len(pareto_front), 
-                                                         state = state, 
-                                                         action = action, 
-                                                         prev_hv=prev_hv,
-                                                         pareto_front = pareto_front,
-                                                         sorted_pareto_front=sorted_pareto_front)
+                                                        hv=cur_hv, 
+                                                        pareto_size=len(pareto_front), 
+                                                        state = state, 
+                                                        action = action, 
+                                                        prev_hv=prev_hv,
+                                                        pareto_front = pareto_front,
+                                                        sorted_pareto_front=sorted_pareto_front,
+                                                        norm_hv = norm_hv,
+                                                        binary_hv = binary_hv,
+                                                        firstder_hv = firstder_hv,
+                                                        secondder_hv = secondder_hv,
+                                                        warmup = warmup)
 
             operator_settings = self.agent.retrieve_operator(action = action)
             states_trace.append(state)
@@ -368,7 +426,6 @@ class NSGA_III_Learning:
             reward_trace.append(reward)
             reward_idx_trace.append(idx)
             prev_hv = cur_hv
-
             
 
 
@@ -379,12 +436,19 @@ class NSGA_III_Learning:
         if self.MP > 0:
             pool.close()
             pool.join()
-        
-
-        return states_trace[:-1], actions_trace[:-1], reward_trace, reward_idx_trace
+        if warmup:
+            return hv_list
+        else: 
+            return states_trace[:-1], actions_trace[:-1], reward_trace, reward_idx_trace
 
     def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
         """ Run the NSGA-III algorithm multiple times """
+        for i in range(10):
+            hv_list = self._RUN(warmup=True)
+            self.hv_bounds[0] = min(self.hv_bounds[0], min(hv_list))
+            self.hv_bounds[1] = max(self.hv_bounds[1], max(hv_list))
+            self.hv_trace = []
+        
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
             _, actions, rewards, reward_idx = self._RUN()
             print(idx)
@@ -412,21 +476,17 @@ class NSGA_III_Learning:
             self.run_performance.append(clipped_performance)
             #self.run_reward.append(rewards)
 
-
-            #normalise and clip performance
-            
             #save models
-            
             #IF STATEMENT TO SAVE BEST MODEL 
             if clipped_performance > self.agent.best_performance:
                 self.agent.best_performance = clipped_performance
                 print('best performance', self.agent.best_performance)
                 self.bestperformancedict[idx] = clipped_performance
-                self.agent.save_model(fname = f'Bestmodel_29-01-2024_test2_{problem_name}.h5')
+                self.agent.save_model(fname = f'Bestmodel_31-01-2024_test2_{problem_name}.h5')
 
 
             #Save last model
-            self.agent.save_model(fname = f'Lastmodel_29-01-2024_test2_{problem_name}.h5')
+            self.agent.save_model(fname = f'Lastmodel_31-01-2024_test2_{problem_name}.h5')
             # Decay epsilon, to decrease exploration and increase exploitation
             self.agent.epsilon_decay_exponential(idx)
         return 
@@ -451,7 +511,7 @@ if __name__ == '__main__':
 
         z = np.polyfit(episodes, performance, 3)
         p = np.poly1d(z)
-        plt.plot(episodes,p(episodes),"r--", label = 'trendline')
+        plt.plot(episodes, p(episodes),"r--", label = 'trendline')
         plt.title(title)
         plt.xlabel('Episode')
         plt.ylabel('Performance')
@@ -483,7 +543,7 @@ if __name__ == '__main__':
 
 
     
-
+    
     performance = {'performance': nsga.run_performance,
                    'epsilon': nsga.run_epsilon,
                    #'hv_dict': nsga.hv_dict,
@@ -491,7 +551,7 @@ if __name__ == '__main__':
                    'best_performance': nsga.bestperformancedict} 
 
     print(performance)
-    file = open(f"Results/NSGA-III_Learning/Lastmodel_29-01-2024_test2_{problem_name}.pkl", "wb")
+    file = open(f"Results/NSGA-III_Learning/Lastmodel_31-01-2024_test2_{problem_name}.pkl", "wb")
     pickle.dump(performance, file)
     file.close()
 
