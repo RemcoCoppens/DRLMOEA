@@ -261,7 +261,7 @@ class NSGA_III:
                 self.save_run_to_file(performance, idx, problem_name)
 
 if __name__ == '__main__':
-    problem_name = 'Large_dtlz2'
+    problem_name = 'DF10'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:

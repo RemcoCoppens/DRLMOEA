@@ -89,9 +89,9 @@ def plotstates(dfs, runs, gens, labels):
     return
 
 
-problem_name = 'dtlz2'
-directory = 'NSGA-III_DRL_state_action_evaluation'
-load_model = 'Bestmodel_30-01-2024_dtlz2-20172815'
+problem_name = 'dtlz3'
+directory = 'NSGA-III_DRL'
+load_model = 'Bestmodel_30-01-2024_dtlz2'
 statesnames = ['gen', 'stag_count', 'mean', 'min', 'std' , 'norm_hv', 'pareto_size', 'spacing', 'hole relative size']
 runs = 500
 gens = 100

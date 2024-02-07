@@ -109,10 +109,10 @@ def plot_hypervolume(problem_name, run, nsga,  directory, directory2, gens, mode
     plt.xlabel("Generation", )
     plt.ylabel("Hypervolume")
     plt.title(f"Problem {problem_name}")
-    plt.ylim(0,1)
-    plt.yticks(np.arange(0, 1.05, step = 0.1))
+    #plt.ylim(0,1)
+    #plt.yticks(np.arange(0, 1.05, step = 0.1))
     #plt.xticks(np.arange(0, gens+1, step = 1))
-    plt.legend()
+    plt.legend(loc = 'lower right')
 
     if model2 == None:
         plt.savefig(f'Results/{directory}/{problem_name}_Gens_{gens}_{model1}.png')
@@ -125,15 +125,15 @@ def plot_hypervolume(problem_name, run, nsga,  directory, directory2, gens, mode
     
     plt.show()
 
-problem_name = 'Small_dtlz2'
+problem_name = 'DF14'
 doc = plot_hypervolume(problem_name= problem_name, 
                        run = 10, 
-                       directory = "NSGA-III_DRL", 
+                       directory = "NSGA-III_DRL_Transferability_30-01-2024", 
                        directory2 = "NSGA-III_DRL",
                        gens =100,
                        nsga = f'NSGA-III/Problem_{problem_name}_POP_size_20',
-                       model1 = 'Bestmodel_29-01-2024_dtlz2',
-                       model2 = 'Lastmodel_29-01-2024_dtlz2',
+                       model1 = 'Bestmodel_30-01-2024_dtlz2',
+                       model2 = 'Lastmodel_30-01-2024_dtlz2',
                        model3 = None,
                        model4 = None
                        )

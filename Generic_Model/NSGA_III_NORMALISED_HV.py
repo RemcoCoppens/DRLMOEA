@@ -51,6 +51,8 @@ class NSGA_III:
         self.val_bounds = ps.problem_bounds[problem_name]['val']
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
         self.hv_bounds = [1.0, 0.0]
+        self.hv_lowerbound = 1.0
+        
         
         
 
@@ -99,6 +101,13 @@ class NSGA_III:
             return min(max((val - LB)/(UB - LB), 0.0), 1.0)
         else:
             return (val - LB)/(UB - LB)
+        
+    def normalize_lower_bound(self, val, LB, clip=True):
+        """ Apply (bounded) normalization on the given value using the given bounds (LB, UB) """
+        if clip:
+            return max((val - LB), 0.0)
+        else:
+            return (val - LB)
 
     def retrieve_pareto_front(self, population):
         """ Calculate and return the pareto optimal set """
@@ -156,9 +165,12 @@ class NSGA_III:
         #Start time
         Start_timer = time.time()
         norm_hv_list = []
+        norm_hv_non_clip_list = []
         hv_list = []
         firstder_hv_list = []
         secondder_hv_list = []
+
+        norm_hv_with_min_list = []
 
         #Set up the toolbox for individuals and population
         toolbox = base.Toolbox()
@@ -216,15 +228,24 @@ class NSGA_III:
         firstder_hv_list.append(firstder_hv)    
         secondder_hv = self.secondderivative_hv(firstder_hv_list)
         secondder_hv_list.append(secondder_hv)
-        print('hv', hv)
-        print('hv_list', hv_list)
-        print('firstder_hv', firstder_hv)
-        print('firstder_hv_list', firstder_hv_list)
-        print('secondder_hv', secondder_hv)
+        
+        if hv < self.hv_lowerbound:
+            self.hv_lowerbound = hv
+
+        norm_hv_with_min = self.normalize_lower_bound(hv, self.hv_lowerbound, clip = True)
+        norm_hv_with_min_list.append(norm_hv_with_min)
+
+        # print('hv', hv)
+        # print('hv_list', hv_list)
+        # print('firstder_hv', firstder_hv)
+        # print('firstder_hv_list', firstder_hv_list)
+        # print('secondder_hv', secondder_hv)
     
         if warmup == False:
             norm_hv = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
+            norm_hv_non_clip = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=False)
             norm_hv_list.append(norm_hv)
+            norm_hv_non_clip_list.append(norm_hv_non_clip)
             
         
         #Save generation to file
@@ -270,15 +291,23 @@ class NSGA_III:
             firstder_hv_list.append(firstder_hv)    
             secondder_hv = self.secondderivative_hv(firstder_hv_list)
             secondder_hv_list.append(secondder_hv)
-            print('hv', hv)
-            print('hv_list', hv_list)
-            print('firstder_hv', firstder_hv)
-            print('firstder_hv_list', firstder_hv_list)
-            print('secondder_hv', secondder_hv)
+            # print('hv', hv)
+            # print('hv_list', hv_list)
+            # print('firstder_hv', firstder_hv)
+            # print('firstder_hv_list', firstder_hv_list)
+            # print('secondder_hv', secondder_hv)
+            if hv < self.hv_lowerbound:
+                self.hv_lowerbound = hv
+
+            norm_hv_with_min = self.normalize_lower_bound(hv, self.hv_lowerbound, clip = True)
+            norm_hv_with_min_list.append(norm_hv_with_min)
             
             if warmup == False:
                 norm_hv = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
+                norm_hv_non_clip = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=False)
                 norm_hv_list.append(norm_hv)
+                norm_hv_non_clip_list.append(norm_hv_non_clip)
+
             
 
 
@@ -306,29 +335,32 @@ class NSGA_III:
         if warmup:
             return norm_hv_list, hv_list
         else:
-            return df, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list
+            return df, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list, norm_hv_non_clip_list, norm_hv_with_min_list
 
 
     def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
         """ Run the NSGA-III algorithm multiple times """
-        for i in range(10):
+        for i in range(1):
             _, hv_list = self._RUN(warmup=True)
             self.hv_bounds[0] = min(self.hv_bounds[0], min(hv_list))
             self.hv_bounds[1] = max(self.hv_bounds[1], max(hv_list))
+            #self.hv_bounds[1] = 1.0
 
             print(self.hv_bounds)
 
 
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
-            performance, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list = self._RUN()
+            performance, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list, norm_hv_non_clip_list, norm_hv_with_min_list = self._RUN()
             #self.save_run_to_file(performance, idx, problem_name)
             
             
 
             plt.plot(hv_list, label = 'hv')
             plt.plot(norm_hv_list, label = 'norm hv')
-            plt.plot(firstder_hv_list, label = 'firstder hv')
-            plt.plot(secondder_hv_list, label = 'secondder hv')
+            plt.plot(norm_hv_non_clip_list, label = 'norm hv non clip')
+            plt.plot(norm_hv_with_min_list, label = 'norm hv with min')
+            #plt.plot(firstder_hv_list, label = 'firstder hv')
+            #plt.plot(secondder_hv_list, label = 'secondder hv')
 
             plt.legend()
             plt.show()
@@ -336,13 +368,13 @@ class NSGA_III:
 
 
 if __name__ == '__main__':
-    problem_name = 'dtlz2'
+    problem_name = 'DF3'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
         problem = ps.problems_DEAP[problem_name]
 
-    generations = [10]
+    generations = [100]
     for i in generations:
         nsga = NSGA_III(problem_name = problem_name, 
                         problem = problem, 

@@ -146,12 +146,16 @@ class Agent:
 
 
         #Spacing and hole relative size
-        normalized_sorted_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
-                                                 LB=optim.val_bounds[i][0], 
-                                                 UB=optim.val_bounds[i][1]) for i in range(optim.NBOJ)]) for obj_v in sorted_pareto_front])        
-    
-        spacing = self.calculate_spacing(normalized_sorted_pareto_set)
-        hole_relative_size = self.calculate_hole_relative_size(normalized_sorted_pareto_set)
+        if pareto_size > 1:
+            normalized_sorted_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
+                                                    LB=optim.val_bounds[i][0], 
+                                                    UB=optim.val_bounds[i][1]) for i in range(optim.NBOJ)]) for obj_v in sorted_pareto_front])        
+        
+            spacing = self.calculate_spacing(normalized_sorted_pareto_set)
+            hole_relative_size = self.calculate_hole_relative_size(normalized_sorted_pareto_set)
+        else:
+            spacing = 0
+            hole_relative_size = 0
 
 
         # Create state representation first version
@@ -208,6 +212,20 @@ class Agent:
         #                         spacing,
         #                         hole_relative_size]).flatten() 
 
+
+        #Normalized HV, Binary HV and change in HV #12
+        # state_repre = np.array([gen/optim.NGEN,
+        #                         min(1.0, optim.stagnation_counter/10),
+        #                         np.mean(norm_avgs),
+        #                         np.mean(norm_mins),
+        #                         np.mean(norm_stds),
+        #                         norm_hv,
+        #                         binary_hv,
+        #                         firstder_hv,
+        #                         secondder_hv,
+        #                         pareto_size/optim.POP_SIZE, #cardinality: simple the number of points in pareto front
+        #                         spacing,
+        #                         hole_relative_size]).flatten() 
 
 
         return state_repre
