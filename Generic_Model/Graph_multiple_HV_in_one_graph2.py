@@ -125,10 +125,10 @@ def plot_hypervolume(problem_name, run, nsga,  directory, directory2, gens, mode
     
     plt.show()
 
-problem_name = 'DF14'
+problem_name = 'DF13'
 doc = plot_hypervolume(problem_name= problem_name, 
                        run = 10, 
-                       directory = "NSGA-III_DRL_Transferability_30-01-2024", 
+                       directory = "NSGA-III_DRL", 
                        directory2 = "NSGA-III_DRL",
                        gens =100,
                        nsga = f'NSGA-III/Problem_{problem_name}_POP_size_20',

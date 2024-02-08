@@ -500,7 +500,7 @@ class NSGA_III_DRL:
 
 if __name__ == '__main__':
 
-    problem_name = 'dtlz2'
+    problem_name = 'DF13'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
@@ -515,8 +515,8 @@ if __name__ == '__main__':
                     MP=0, 
                     verbose=False,
                     learn_agent=False, 
-                    load_agent= 'Lastmodel_03-02-2024_[dtlz1, dtlz2, dtlz3, dtlz4, dtlz5]',
-                    save = False)
+                    load_agent= 'Lastmodel_30-01-2024_dtlz2',
+                    save = True)
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes= 10, progressbar=False, shapley = True)
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes= 10, progressbar=False, shapley = False)
 

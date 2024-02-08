@@ -51,6 +51,7 @@ class NSGA_III:
         self.val_bounds = ps.problem_bounds[problem_name]['val']
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
         self.hv_bounds = [1.0, 0.0]
+        self.hv_bounds2 = [0.99, 1.0]
         self.hv_lowerbound = 1.0
         
         
@@ -243,7 +244,7 @@ class NSGA_III:
     
         if warmup == False:
             norm_hv = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
-            norm_hv_non_clip = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=False)
+            norm_hv_non_clip = self.normalize(hv, self.hv_bounds2[0], self.hv_bounds2[1], clip=True)
             norm_hv_list.append(norm_hv)
             norm_hv_non_clip_list.append(norm_hv_non_clip)
             
@@ -304,7 +305,7 @@ class NSGA_III:
             
             if warmup == False:
                 norm_hv = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=True)
-                norm_hv_non_clip = self.normalize(hv, self.hv_bounds[0], self.hv_bounds[1], clip=False)
+                norm_hv_non_clip = self.normalize(hv, self.hv_bounds2[0], self.hv_bounds2[1], clip=True)
                 norm_hv_list.append(norm_hv)
                 norm_hv_non_clip_list.append(norm_hv_non_clip)
 
@@ -344,6 +345,8 @@ class NSGA_III:
             _, hv_list = self._RUN(warmup=True)
             self.hv_bounds[0] = min(self.hv_bounds[0], min(hv_list))
             self.hv_bounds[1] = max(self.hv_bounds[1], max(hv_list))
+            self.hv_bounds2[0] = min(self.hv_bounds2[0], min(hv_list))
+            self.hv_bounds2[1] = max(self.hv_bounds2[1], max(hv_list))
             #self.hv_bounds[1] = 1.0
 
             print(self.hv_bounds)
@@ -368,7 +371,7 @@ class NSGA_III:
 
 
 if __name__ == '__main__':
-    problem_name = 'DF3'
+    problem_name = 'dtlz4'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
@@ -385,6 +388,6 @@ if __name__ == '__main__':
                         MP=0, 
                         verbose=False)
     
-        nsga.multiple_runs(problem_name = problem_name, nr_of_runes=1, progressbar=True)
+        nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
 
 
