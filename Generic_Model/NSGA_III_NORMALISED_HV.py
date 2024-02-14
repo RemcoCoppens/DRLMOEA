@@ -388,6 +388,6 @@ if __name__ == '__main__':
                         MP=0, 
                         verbose=False)
     
-        nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
+        nsga.multiple_runs(problem_name = problem_name, nr_of_runes=1, progressbar=True)
 
 

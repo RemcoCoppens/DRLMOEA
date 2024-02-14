@@ -245,7 +245,7 @@ class NSGA_III:
                                              final_pop=1,
                                              alg_exec_time=algorithm_execution_time) 
                 df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-                display(df)
+                #display(df)
         # Close the multiprocessing pool if used
         if self.MP > 0:
             pool.close()
@@ -261,7 +261,7 @@ class NSGA_III:
                 self.save_run_to_file(performance, idx, problem_name)
 
 if __name__ == '__main__':
-    problem_name = 'DF10'
+    problem_name = 'zdt6'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:

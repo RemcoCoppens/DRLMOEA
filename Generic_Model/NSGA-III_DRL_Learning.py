@@ -55,7 +55,7 @@ class NSGA_III_Learning:
                                       [0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
                                       [0.01, 0.2, 0.4, 0.6, 0.8, 1.0]],
                            batch_size = 32,
-                           input_size = 12,
+                           input_size = 9,
                            replace = self.NGEN*100)
                            
         self.learn_agent = learn_agent
@@ -482,11 +482,11 @@ class NSGA_III_Learning:
                 self.agent.best_performance = clipped_performance
                 print('best performance', self.agent.best_performance)
                 self.bestperformancedict[idx] = clipped_performance
-                self.agent.save_model(fname = f'Bestmodel_02-02-2024_test3_{problem_name}.h5')
+                self.agent.save_model(fname = f'Bestmodel_16-02-2024_{problem_name}.h5')
 
 
             #Save last model
-            self.agent.save_model(fname = f'Lastmodel_02-02-2024_test3_{problem_name}.h5')
+            self.agent.save_model(fname = f'Lastmodel_16-02-2024_{problem_name}.h5')
             # Decay epsilon, to decrease exploration and increase exploitation
             self.agent.epsilon_decay_exponential(idx)
         return 
@@ -542,8 +542,6 @@ if __name__ == '__main__':
     nsga.multiple_runs(problem_name = problem_name, nr_of_runes=nr_of_runs, progressbar=False)
 
 
-    
-    
     performance = {'performance': nsga.run_performance,
                    'epsilon': nsga.run_epsilon,
                    #'hv_dict': nsga.hv_dict,
@@ -551,9 +549,10 @@ if __name__ == '__main__':
                    'best_performance': nsga.bestperformancedict} 
 
     print(performance)
-    file = open(f"Results/NSGA-III_Learning/Lastmodel_02-02-2024_test3_{problem_name}.pkl", "wb")
+    file = open(f"Results/NSGA-III_Learning/Lastmodel_16-02-2024_{problem_name}.pkl", "wb")
     pickle.dump(performance, file)
     file.close()
 
     learningcurveplot(nsga.run_performance, f'Learning curve for {problem_name}')
+
 

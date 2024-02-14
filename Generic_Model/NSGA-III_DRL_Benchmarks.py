@@ -49,7 +49,7 @@ class NSGA_III_DRL:
         self.verbose = verbose
         self.save = save
         if self.save:
-            self.directory = self.check_results_directory()
+            self.directory = 'NSGA-III_DRL'
         self.val_bounds = ps.problem_bounds[problem_name]['val']
         self.std_bounds = ps.problem_bounds[problem_name]['std']
         
@@ -499,24 +499,46 @@ class NSGA_III_DRL:
             
 
 if __name__ == '__main__':
+    for i in ps.problem_names_DEAP + ps.problem_names_CEC:
+        problem_name = i
+        if problem_name.startswith('DF'):
+            problem = ps.problems_CEC[problem_name]
+        else:
+            problem = ps.problems_DEAP[problem_name]
 
-    problem_name = 'DF13'
-    if problem_name.startswith('DF'):
-        problem = ps.problems_CEC[problem_name]
-    else:
-        problem = ps.problems_DEAP[problem_name]
+        nsga = NSGA_III_DRL(problem_name = problem_name, 
+                        problem = problem, 
+                        num_gen=100, 
+                        pop_size=20, 
+                        cross_prob=1.0, 
+                        mut_prob=1.0, 
+                        MP=0, 
+                        verbose=False,
+                        learn_agent=False, 
+                        load_agent= 'Bestmodel_30-01-2024_dtlz2',
+                        save = True)
+        
+        nsga.multiple_runs(problem_name = problem_name, nr_of_runes= 100, progressbar=False, shapley = False)
 
-    nsga = NSGA_III_DRL(problem_name = problem_name, 
-                    problem = problem, 
-                    num_gen=100, 
-                    pop_size=20, 
-                    cross_prob=1.0, 
-                    mut_prob=1.0, 
-                    MP=0, 
-                    verbose=False,
-                    learn_agent=False, 
-                    load_agent= 'Lastmodel_30-01-2024_dtlz2',
-                    save = True)
+    # problem_name = 'dtlz1'
+    # if problem_name.startswith('DF'):
+    #     problem = ps.problems_CEC[problem_name]
+    # else:
+    #     problem = ps.problems_DEAP[problem_name]
+
+    # nsga = NSGA_III_DRL(problem_name = problem_name, 
+    #                 problem = problem, 
+    #                 num_gen=100, 
+    #                 pop_size=20, 
+    #                 cross_prob=1.0, 
+    #                 mut_prob=1.0, 
+    #                 MP=0, 
+    #                 verbose=False,
+    #                 learn_agent=False, 
+    #                 load_agent= 'Lastmodel_15-02-2024_dtlz2',
+    #                 save = True)
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes= 10, progressbar=False, shapley = False)
+    # nsga.multiple_runs(problem_name = problem_name, nr_of_runes= 10, progressbar=False, shapley = False)
+
+
 
