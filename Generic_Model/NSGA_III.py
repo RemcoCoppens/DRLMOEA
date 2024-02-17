@@ -19,7 +19,8 @@ import Benchmark_Problem_Suites as ps
 from tqdm import tqdm
 import pickle
 
-
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 
 class NSGA_III:
@@ -177,6 +178,7 @@ class NSGA_III:
         #Generate initial population
         pop = toolbox.population(n=self.POP_SIZE)
         
+        
         #Evaluate the individuals of the initial population with an invalid fitness (measure evaluation time)
         eval_start = time.time()
         invalid_ind = [ind for ind in pop if not ind.fitness.valid]
@@ -230,6 +232,18 @@ class NSGA_III:
 
             #Calculate hypervolume of population
             pareto_front = self.retrieve_pareto_front(population=pop)
+            #print('pareto front')
+            # print(pareto_front)
+            # pareto_front = np.array(pareto_front)
+            # fig = plt.figure()
+            # ax = fig.add_subplot(111, projection='3d')
+            # ax.scatter(pareto_front[:, 0], pareto_front[:, 1], pareto_front[:, 2])
+            # ax.set_xlabel('Objective 1')
+            # ax.set_ylabel('Objective 2')
+            # ax.set_zlabel('Objective 3')
+            # plt.title('Pareto Front')
+            # plt.show()
+            
             hv = self.calculate_hypervolume(pareto_front=pareto_front)
 
             """"Save results"""
@@ -245,7 +259,7 @@ class NSGA_III:
                                              final_pop=1,
                                              alg_exec_time=algorithm_execution_time) 
                 df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-                #display(df)
+                display(df)
         # Close the multiprocessing pool if used
         if self.MP > 0:
             pool.close()
@@ -261,7 +275,7 @@ class NSGA_III:
                 self.save_run_to_file(performance, idx, problem_name)
 
 if __name__ == '__main__':
-    problem_name = 'zdt6'
+    problem_name = 'dtlz2'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
@@ -277,8 +291,8 @@ if __name__ == '__main__':
                         mut_prob=1.0, 
                         MP=0, 
                         verbose=False,
-                        save = True)
+                        save = False)
     
-        nsga.multiple_runs(problem_name = problem_name, nr_of_runes=10, progressbar=True)
+        nsga.multiple_runs(problem_name = problem_name, nr_of_runes=1, progressbar=True)
 
 

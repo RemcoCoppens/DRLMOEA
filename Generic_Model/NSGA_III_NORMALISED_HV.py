@@ -49,6 +49,8 @@ class NSGA_III:
         self.verbose = verbose
         #self.directory = self.check_results_directory()
         self.val_bounds = ps.problem_bounds[problem_name]['val']
+        self.val_bounds_population = [[0,0] for _ in range(self.NBOJ)]
+        self.val_bounds_pareto = [[0,0] for _ in range(self.NBOJ)]
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
         self.hv_bounds = [1.0, 0.0]
         self.hv_bounds2 = [0.99, 1.0]
@@ -110,13 +112,19 @@ class NSGA_III:
         else:
             return (val - LB)
 
-    def retrieve_pareto_front(self, population):
+    def retrieve_pareto_front(self, population, gen= None):
         """ Calculate and return the pareto optimal set """
         pareto_front = tools.sortNondominated(individuals=population, 
                                               k=self.POP_SIZE, 
                                               first_front_only=True)[0]
         
-        indivs = [list(np.array(indiv.fitness.values)) for indiv in population]
+        if gen == 0:
+            indivs = [list(np.array(indiv.fitness.values)) for indiv in pareto_front]
+            for ind in indivs:
+                for i in range(self.NBOJ):
+                    if ind[i] >= self.val_bounds_pareto[i][1]:
+                        self.val_bounds_pareto[i][1] = ind[i]
+
        
         return [np.array(indiv.fitness.values) for indiv in pareto_front]
     
@@ -126,9 +134,20 @@ class NSGA_III:
         normalized_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
                                                                 LB=self.val_bounds[i][0], 
                                                                 UB=self.val_bounds[i][1]) for i in range(self.NBOJ)]) for obj_v in pareto_front])        
+        normalized_pareto_set_population = np.array([tuple([self.normalize(val=obj_v[i], 
+                                                                LB=self.val_bounds_population[i][0], 
+                                                                UB=self.val_bounds_population[i][1]) for i in range(self.NBOJ)]) for obj_v in pareto_front])        
+        
+        normalized_pareto_set_pareto = np.array([tuple([self.normalize(val=obj_v[i], 
+                                                                LB=self.val_bounds_pareto[i][0], 
+                                                                UB=self.val_bounds_pareto[i][1]) for i in range(self.NBOJ)]) for obj_v in pareto_front])        
+        
+        
         hv = hypervolume(normalized_pareto_set, self.hv_reference_point)
+        hv_population = hypervolume(normalized_pareto_set_population, self.hv_reference_point)
+        hv_pareto = hypervolume(normalized_pareto_set_pareto, self.hv_reference_point)
         #self.hv_tracking.append(hv)
-        return hv
+        return hv, hv_population, hv_pareto
 
     def binary_hv(self, hv_list):
         if hv_list[-1] >= hv_list[-2]:
@@ -170,6 +189,8 @@ class NSGA_III:
         hv_list = []
         firstder_hv_list = []
         secondder_hv_list = []
+        norm_hv_pop_list = []
+        norm_hv_pareto_list = []
 
         norm_hv_with_min_list = []
 
@@ -211,7 +232,13 @@ class NSGA_III:
         fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fitness.values = fit
+            for i in range(self.NBOJ):
+                if fit[i] >= self.val_bounds_population[i][1]:
+                    self.val_bounds_population[i][1] = fit[i]
+            
+            
         avg_eval_time = (time.time() - eval_start) / len(invalid_ind)
+        
         
         #Compile statistics about the population
         if warmup == False:
@@ -221,14 +248,16 @@ class NSGA_III:
                 print(self.logbook.stream)
         
         #Calculate hypervolume of initial population
-        pareto_front = self.retrieve_pareto_front(population=pop)
-        hv = self.calculate_hypervolume(pareto_front=pareto_front)
+        pareto_front = self.retrieve_pareto_front(population=pop, gen = 0)
+        hv, norm_hv_population, norm_hv_pareto = self.calculate_hypervolume(pareto_front=pareto_front)
         hv_list.append(hv)
         binary_hv = 1
         firstder_hv = self.firstderivative_hv(hv_list)
         firstder_hv_list.append(firstder_hv)    
         secondder_hv = self.secondderivative_hv(firstder_hv_list)
         secondder_hv_list.append(secondder_hv)
+        norm_hv_pop_list.append(norm_hv_population)
+        norm_hv_pareto_list.append(norm_hv_pareto)
         
         if hv < self.hv_lowerbound:
             self.hv_lowerbound = hv
@@ -247,6 +276,8 @@ class NSGA_III:
             norm_hv_non_clip = self.normalize(hv, self.hv_bounds2[0], self.hv_bounds2[1], clip=True)
             norm_hv_list.append(norm_hv)
             norm_hv_non_clip_list.append(norm_hv_non_clip)
+
+            
             
         
         #Save generation to file
@@ -284,7 +315,7 @@ class NSGA_III:
 
             #Calculate hypervolume of population
             pareto_front = self.retrieve_pareto_front(population=pop)
-            hv = self.calculate_hypervolume(pareto_front=pareto_front)
+            hv, norm_hv_population, norm_hv_pareto = self.calculate_hypervolume(pareto_front=pareto_front)
             hv_list.append(hv)
             
             binary_hv = self.binary_hv(hv_list)
@@ -292,6 +323,8 @@ class NSGA_III:
             firstder_hv_list.append(firstder_hv)    
             secondder_hv = self.secondderivative_hv(firstder_hv_list)
             secondder_hv_list.append(secondder_hv)
+            norm_hv_pop_list.append(norm_hv_population)
+            norm_hv_pareto_list.append(norm_hv_pareto)
             # print('hv', hv)
             # print('hv_list', hv_list)
             # print('firstder_hv', firstder_hv)
@@ -310,7 +343,7 @@ class NSGA_III:
                 norm_hv_non_clip_list.append(norm_hv_non_clip)
 
             
-
+           
 
 
             """"Save results"""
@@ -327,7 +360,7 @@ class NSGA_III:
                                                 final_pop=1,
                                                 alg_exec_time=algorithm_execution_time) 
                     df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
-                    display(df)
+                    #display(df)
         # Close the multiprocessing pool if used
         if self.MP > 0:
             pool.close()
@@ -336,12 +369,12 @@ class NSGA_III:
         if warmup:
             return norm_hv_list, hv_list
         else:
-            return df, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list, norm_hv_non_clip_list, norm_hv_with_min_list
+            return df, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list, norm_hv_non_clip_list, norm_hv_with_min_list, norm_hv_pop_list, norm_hv_pareto_list
 
 
     def multiple_runs(self, problem_name, nr_of_runes, progressbar = False):
         """ Run the NSGA-III algorithm multiple times """
-        for i in range(1):
+        for i in range(10):
             _, hv_list = self._RUN(warmup=True)
             self.hv_bounds[0] = min(self.hv_bounds[0], min(hv_list))
             self.hv_bounds[1] = max(self.hv_bounds[1], max(hv_list))
@@ -350,18 +383,21 @@ class NSGA_III:
             #self.hv_bounds[1] = 1.0
 
             print(self.hv_bounds)
-
+            self.val_bounds_pareto = [[0,0] for _ in range(self.NBOJ)]
+            self.val_bounds_population = [[0,0] for _ in range(self.NBOJ)]
 
         for idx in tqdm(range(1, nr_of_runes+1)) if progressbar else range(1, nr_of_runes+1):
-            performance, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list, norm_hv_non_clip_list, norm_hv_with_min_list = self._RUN()
+            performance, norm_hv_list, hv_list, firstder_hv_list, secondder_hv_list, norm_hv_non_clip_list, norm_hv_with_min_list, norm_hv_pop_list, norm_hv_pareto_list = self._RUN()
             #self.save_run_to_file(performance, idx, problem_name)
-            
-            
-
+            self.val_bounds_pareto = [[0,0] for _ in range(self.NBOJ)]
+            self.val_bounds_population = [[0,0] for _ in range(self.NBOJ)]
             plt.plot(hv_list, label = 'hv')
             plt.plot(norm_hv_list, label = 'norm hv')
-            plt.plot(norm_hv_non_clip_list, label = 'norm hv non clip')
-            plt.plot(norm_hv_with_min_list, label = 'norm hv with min')
+            plt.plot(norm_hv_pop_list, label = 'hv population')
+            plt.plot(norm_hv_pareto_list, label = 'hv pareto')
+            plt.ylim(0,1)
+            #plt.plot(norm_hv_non_clip_list, label = 'norm hv non clip')
+            #plt.plot(norm_hv_with_min_list, label = 'norm hv with min')
             #plt.plot(firstder_hv_list, label = 'firstder hv')
             #plt.plot(secondder_hv_list, label = 'secondder hv')
 
@@ -371,7 +407,7 @@ class NSGA_III:
 
 
 if __name__ == '__main__':
-    problem_name = 'dtlz4'
+    problem_name = 'dtlz1'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:

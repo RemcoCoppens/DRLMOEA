@@ -49,7 +49,7 @@ class NSGA_III_DRL:
         self.verbose = verbose
         self.save = save
         if self.save:
-            self.directory = self.check_results_directory()
+            self.directory = 'NSGA-III_DRL'
         self.val_bounds = ps.problem_bounds[problem_name]['val']
         self.std_bounds = ps.problem_bounds[problem_name]['std']
         
@@ -71,6 +71,7 @@ class NSGA_III_DRL:
 
         self.stagnation_counter = 0
         self.hv_reference_point = np.array([1.0]*self.NBOJ)
+        self.hv_absolute_reference_point = np.array([0.0]*self.NBOJ)
         self.hv_bounds = [1.0, 0.0]
         self.hv_trace = []
         
@@ -96,13 +97,14 @@ class NSGA_III_DRL:
             return 'NSGA-III_DRL'   
     
     
-    def save_generation(self, gen, population, avg_eval_time, pareto, hv, state, action, final_pop=None, alg_exec_time=None):
+    def save_generation(self, gen, population, avg_eval_time, pareto, hv, abs_hv, state, action, final_pop=None, alg_exec_time=None):
         """ Save performance of generation to file """
         # Summarize performance in dictionary object and save to file
         performance_dict = {}
         performance_dict['gen'] = [gen]
         performance_dict['pareto_front'] = [pareto]
         performance_dict['hypervolume'] = hv
+        performance_dict['absolute_hypervolume'] = abs_hv
         performance_dict['state'] = [state]
         performance_dict['action'] = [action]
         performance_dict['avg_eval_time'] = avg_eval_time
@@ -141,6 +143,11 @@ class NSGA_III_DRL:
             return min(max((val - LB)/(UB - LB), 0.0), 1.0)
         else:
             return (val - LB)/(UB - LB)
+        
+    
+    def denormalize(self, val):
+        """ Apply denormalization on the given value using the given bounds (LB, UB) """
+        return val
     
 
     def retrieve_pareto_front(self, population):
@@ -157,14 +164,21 @@ class NSGA_III_DRL:
     
     def calculate_hypervolume(self, pareto_front) -> float:
         """ Normalize values and calculate the hypervolume indicator of the current pareto front """
-        # Retrieve and calculate pareto front figures
+        # Retrieve and calculate normalised pareto front set
+        
+        
         normalized_pareto_set = np.array([tuple([self.normalize(val=obj_v[i], 
                                                                 LB=self.val_bounds[i][0], 
                                                                 UB=self.val_bounds[i][1]) for i in range(self.NBOJ)]) for obj_v in pareto_front])        
+        
+        pareto_front = np.array([tuple(self.denormalize(val=obj_v[i]) for i in range(self.NBOJ)) for obj_v in pareto_front])
+        
 
         hv = hypervolume(normalized_pareto_set, self.hv_reference_point)
-        self.hv_trace.append(hv)
-        return hv
+
+        abs_hv = hypervolume(pareto_front * -1, self.hv_absolute_reference_point)
+        #self.hv_tracking.append(hv)
+        return hv, abs_hv
 
     def binary_hv(self, hv_list):
         if hv_list[-1] >= hv_list[-2]:
@@ -332,6 +346,7 @@ class NSGA_III_DRL:
 
         #Generate initial population
         pop = toolbox.population(n=self.POP_SIZE)
+        
       
         #Evaluate the individuals of the initial population with an invalid fitness (measure evaluation time)
         eval_start = time.time()
@@ -349,7 +364,7 @@ class NSGA_III_DRL:
         
         #Calculate hypervolume of initial population
         pareto_front, sorted_pareto_front = self.retrieve_pareto_front(population=pop)
-        prev_hv = self.calculate_hypervolume(pareto_front=pareto_front)
+        prev_hv, abs_hv = self.calculate_hypervolume(pareto_front=pareto_front)
         hv_list.append(prev_hv)
         binary_hv = 1
         firstder_hv = self.firstderivative_hv(hv_list)
@@ -373,7 +388,7 @@ class NSGA_III_DRL:
         states_trace.append(state)
         actions_trace.append(operator_settings)
         #Save generation to file
-        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv, state = state, action = operator_settings)
+        save_gen = self.save_generation(gen=0, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv, abs_hv = abs_hv, state = state, action = operator_settings)
         df = pd.DataFrame(save_gen)
 
         """Evolutionary process"""
@@ -404,7 +419,7 @@ class NSGA_III_DRL:
 
             #Calculate hypervolume of population
             pareto_front, sorted_pareto_front = self.retrieve_pareto_front(population=pop)
-            cur_hv = self.calculate_hypervolume(pareto_front=pareto_front)
+            cur_hv, abs_hv = self.calculate_hypervolume(pareto_front=pareto_front)
             hv_list.append(cur_hv)
             binary_hv = 1
             firstder_hv = self.firstderivative_hv(hv_list)
@@ -446,13 +461,13 @@ class NSGA_III_DRL:
             """"Save results"""
             #Save generation to file
             if gen!= self.NGEN:
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv, state = state, action = operator_settings)
+                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv, abs_hv = abs_hv, state = state, action = operator_settings)
                 df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
             
             #Final generation
             else:
                 algorithm_execution_time = time.time() - Start_timer
-                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv, state = state, action = operator_settings,
+                save_gen = self.save_generation(gen=gen, population=pop, avg_eval_time=avg_eval_time, pareto = pareto_front, hv = prev_hv, abs_hv = abs_hv, state = state, action = operator_settings,
                                              final_pop=1,
                                              alg_exec_time=algorithm_execution_time) 
                 df = pd.concat([df, pd.DataFrame(save_gen)], ignore_index=True)
@@ -499,8 +514,28 @@ class NSGA_III_DRL:
             
 
 if __name__ == '__main__':
+    # for i in ps.problem_names_DEAP + ps.problem_names_CEC:
+    #     problem_name = i
+    #     if problem_name.startswith('DF'):
+    #         problem = ps.problems_CEC[problem_name]
+    #     else:
+    #         problem = ps.problems_DEAP[problem_name]
 
-    problem_name = 'dtlz3'
+    #     nsga = NSGA_III_DRL(problem_name = problem_name, 
+    #                     problem = problem, 
+    #                     num_gen=100, 
+    #                     pop_size=20, 
+    #                     cross_prob=1.0, 
+    #                     mut_prob=1.0, 
+    #                     MP=0, 
+    #                     verbose=False,
+    #                     learn_agent=False, 
+    #                     load_agent= 'Bestmodel_30-01-2024_dtlz2',
+    #                     save = True)
+        
+    #     nsga.multiple_runs(problem_name = problem_name, nr_of_runes= 100, progressbar=False, shapley = False)
+
+    problem_name = 'Small_dtlz2'
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
@@ -518,5 +553,7 @@ if __name__ == '__main__':
                     load_agent= 'Bestmodel_29-01-2024_dtlz2',
                     save = True)
     
-    nsga.multiple_runs(problem_name = problem_name, nr_of_runes= 10, progressbar=False, shapley = False)
+    nsga.multiple_runs(problem_name = problem_name, nr_of_runes= 1, progressbar=False, shapley = False)
+
+
 

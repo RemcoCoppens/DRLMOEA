@@ -51,8 +51,8 @@ class NSGA_III_Learning:
         #Agent
         self.agent = Agent(lr  = 1e-4,
                            gamma = 0.99,
-                           actions = [[0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
-                                      [0.0, 20.0, 40.0, 60.0, 80.0, 100.0],
+                           actions = [[0.0, 50, 100.0],
+                                      [0.0, 50, 100.0],
                                       [0.01, 0.2, 0.4, 0.6, 0.8, 1.0]],
                            batch_size = 32,
                            input_size = 9,
@@ -482,11 +482,11 @@ class NSGA_III_Learning:
                 self.agent.best_performance = clipped_performance
                 print('best performance', self.agent.best_performance)
                 self.bestperformancedict[idx] = clipped_performance
-                self.agent.save_model(fname = f'Bestmodel_16-02-2024_{problem_name}.h5')
+                self.agent.save_model(fname = f'Bestmodel_16-02-2024_test2_{problem_name}.h5')
 
 
             #Save last model
-            self.agent.save_model(fname = f'Lastmodel_16-02-2024_{problem_name}.h5')
+            self.agent.save_model(fname = f'Lastmodel_16-02-2024_test2_{problem_name}.h5')
             # Decay epsilon, to decrease exploration and increase exploitation
             self.agent.epsilon_decay_exponential(idx)
         return 
@@ -521,7 +521,7 @@ if __name__ == '__main__':
         return
     
     problem_name = 'dtlz2'
-    nr_of_runs = 2000
+    nr_of_runs = 4000
     if problem_name.startswith('DF'):
         problem = ps.problems_CEC[problem_name]
     else:
@@ -549,7 +549,7 @@ if __name__ == '__main__':
                    'best_performance': nsga.bestperformancedict} 
 
     print(performance)
-    file = open(f"Results/NSGA-III_Learning/Lastmodel_16-02-2024_{problem_name}.pkl", "wb")
+    file = open(f"Results/NSGA-III_Learning/Lastmodel_16-02-2024_test2_{problem_name}.pkl", "wb")
     pickle.dump(performance, file)
     file.close()
 

@@ -31,6 +31,7 @@ def get_hypervolume_values(problem_name, run, directory, gens, load_model = None
         max.append(np.max(i))
         avg.append(np.mean(i))
         std.append(np.std(i))
+        
     return min, max, avg, std
 
 
